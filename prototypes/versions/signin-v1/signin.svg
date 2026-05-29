@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="375" height="812" viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .bg{fill:#F6F7FB}
+    .card{fill:#FFFFFF;stroke:#E6E9F0;stroke-width:1;rx:12}
+    .muted{fill:#9AA3B2;font-family:Arial;font-size:12px}
+    .title{fill:#111827;font-family:Arial;font-weight:700;font-size:18px}
+    .primary-btn{fill:#4F46E5;rx:8}
+    .primary-text{fill:#FFFFFF;font-family:Arial;font-weight:700;font-size:16px}
+    .accent{fill:#10B981}
+  </style>
+
+  <rect class="bg" width="375" height="812"/>
+
+  <!-- Header -->
+  <text x="20" y="44" class="title">签到</text>
+  <text x="320" y="44" class="muted" text-anchor="end">我的藏品</text>
+
+  <!-- User Card -->
+  <g transform="translate(16,64)">
+    <rect class="card" width="343" height="96" rx="12"/>
+    <circle cx="44" cy="48" r="24" fill="#E6EEF7"/>
+    <text x="84" y="44" class="title">用户昵称</text>
+    <text x="84" y="66" class="muted">钱包: 0xAb...9f12</text>
+  </g>
+
+  <!-- Balance & Streak -->
+  <g transform="translate(16,176)">
+    <rect class="card" width="343" height="90" rx="12"/>
+    <text x="24" y="44" class="muted">收藏价值</text>
+    <text x="24" y="70" class="title">1234</text>
+    <g transform="translate(220,20)">
+      <text x="0" y="24" class="muted" text-anchor="middle">连续签到</text>
+      <text x="0" y="48" class="title" text-anchor="middle">5 天</text>
+    </g>
+  </g>
+
+  <!-- Sign-in Button -->
+  <g transform="translate(16,286)">
+    <rect class="primary-btn" width="343" height="56" rx="8"/>
+    <text x="171.5" y="36" class="primary-text" text-anchor="middle">立即签到，领取奖励</text>
+  </g>
+
+  <!-- Rewards -->
+  <text x="20" y="372" class="muted">今日奖励</text>
+  <g transform="translate(16,388)">
+    <rect width="103" height="78" class="card"/>
+    <text x="18" y="44" class="title">10 积分</text>
+    <rect x="120" width="103" height="78" class="card"/>
+    <text x="138" y="44" class="title">随机盲盒</text>
+    <rect x="240" width="103" height="78" class="card"/>
+    <text x="258" y="44" class="title">稀有碎片</text>
+  </g>
+
+  <!-- History -->
+  <text x="20" y="488" class="muted">签到记录</text>
+  <g transform="translate(16,500)">
+    <rect width="343" height="120" class="card"/>
+    <text x="24" y="528" class="muted">2026-05-28 — 获得 10 积分</text>
+    <text x="24" y="548" class="muted">2026-05-27 — 获得 5 积分</text>
+    <text x="24" y="568" class="muted">2026-05-26 — 获得 20 积分（盲盒）</text>
+  </g>
+
+  <!-- Footer nav (simplified) -->
+  <g transform="translate(0,740)">
+    <rect x="0" y="0" width="375" height="72" fill="#FFFFFF" stroke="#E6E9F0"/>
+    <text x="56" y="46" class="muted" text-anchor="middle">首页</text>
+    <text x="188" y="46" class="muted" text-anchor="middle">签到</text>
+    <text x="320" y="46" class="muted" text-anchor="middle">我的</text>
+  </g>
+
+</svg>
