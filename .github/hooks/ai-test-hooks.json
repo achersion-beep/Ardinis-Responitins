@@ -1,0 +1,10 @@
+{
+  "pre-run": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\run_ai_tests.ps1 -Setup",
+    "echo Pre-run checks completed"
+  ],
+  "post-run": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\run_ai_tests.ps1 -CollectArtifacts",
+    "echo Post-run artifacts collected"
+  ]
+}
