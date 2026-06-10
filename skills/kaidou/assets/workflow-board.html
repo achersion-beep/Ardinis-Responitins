@@ -1,0 +1,2202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>需求可视化工作流</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #fff;
+    --border: #e2e5ea;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --text-muted: #9ca3af;
+    --blue: #4A90D9;
+    --blue-light: #e8f0fe;
+    --purple: #7C5CBF;
+    --purple-light: #f3eefc;
+    --teal: #1D9E75;
+    --teal-light: #e6f5ef;
+    --amber: #E8A020;
+    --amber-light: #fdf3e0;
+    --coral: #D85A30;
+    --coral-light: #fef0eb;
+    --green: #639922;
+    --green-light: #f1f7e8;
+    --gray: #94a3b8;
+    --gray-light: #f1f5f9;
+    --pink: #D4537E;
+    --pink-light: #fbeaf0;
+    --radius: 12px;
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .app-header h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    cursor: pointer; transition: var(--transition);
+    display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  }
+
+  .btn:hover { background: #f3f4f6; border-color: #c0c0c0; }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-primary:hover { background: #3a7bc8; }
+  .btn-danger { background: #E24B4A; color: #fff; border-color: #E24B4A; }
+  .btn-danger:hover { background: #c94040; }
+
+  .btn-link-mode {
+    background: #fff; color: var(--text); border: 2px dashed var(--purple);
+    position: relative; overflow: hidden;
+  }
+  .btn-link-mode::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(124,92,191,0.06), transparent);
+    animation: btnShine 2s ease-in-out infinite;
+  }
+  @keyframes btnShine {
+    0%, 100% { transform: translateX(-100%); }
+    50% { transform: translateX(100%); }
+  }
+  .btn-link-mode.active {
+    background: var(--purple); color: #fff; border-color: var(--purple);
+    animation: pulse-btn 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-btn {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(124,92,191,0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(124,92,191,0); }
+  }
+  .btn-link-mode.active::after { display: none; }
+
+  .board-wrapper {
+    position: relative; padding: 20px 24px 40px; min-height: calc(100vh - 60px);
+  }
+
+  .columns {
+    display: flex; gap: 16px; align-items: flex-start; position: relative; z-index: 2;
+  }
+
+  .column {
+    flex: 1; min-width: 240px; max-width: 320px;
+    background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+
+  .column.drag-over { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(74,144,217,0.12); }
+  .column.link-target { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,92,191,0.15); }
+
+  .column-header {
+    padding: 14px 16px 10px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+
+  .column-header-left { display: flex; align-items: center; gap: 8px; }
+
+  .column-dot {
+    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+  }
+
+  .column-title { font-size: 13px; font-weight: 600; letter-spacing: -0.2px; }
+
+  .column-count {
+    font-size: 11px; color: var(--text-muted); background: #f0f0f0;
+    padding: 2px 8px; border-radius: 10px; font-weight: 500;
+  }
+
+  .card-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 11px 12px; cursor: grab; transition: var(--transition);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04); user-select: none; position: relative;
+    animation: cardIn 0.3s ease-out;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card:hover { border-color: #c4c9d0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card:active { cursor: grabbing; }
+  .card.dragging { opacity: 0.35; transform: scale(0.96); }
+
+
+  .card.current { border-left: 3px solid var(--blue); background: #fafcff; }
+  .card.priority-high { border-left-color: #E24B4A; }
+  .card.priority-medium { border-left-color: var(--amber); }
+  .card.priority-low { border-left-color: var(--teal); }
+
+  .card.link-source {
+    border-color: var(--purple) !important; border-width: 2px !important;
+    box-shadow: 0 0 0 4px rgba(124,92,191,0.15);
+  }
+
+  .card.linkable {
+    cursor: crosshair;
+  }
+  .card.linkable:hover {
+    border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,92,191,0.1);
+  }
+
+  .card-tags { display: flex; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+
+  .tag {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 500; letter-spacing: 0.2px;
+  }
+
+  .tag-feature { background: var(--blue-light); color: #2a5fa8; }
+  .tag-bug { background: #fce8e8; color: #a32d2d; }
+  .tag-optimize { background: var(--teal-light); color: #0b5c3a; }
+  .tag-urgent { background: var(--coral-light); color: #a8431c; }
+  .tag-link-count {
+    background: var(--purple-light); color: #5a3f9a; font-size: 10px;
+    padding: 2px 6px; border-radius: 4px; font-weight: 500;
+  }
+
+  .card-title { font-size: 13px; font-weight: 500; line-height: 1.4; letter-spacing: -0.1px; }
+
+  .card-meta {
+    font-size: 11px; color: var(--text-muted); display: flex; align-items: center;
+    gap: 6px; margin-top: 8px;
+  }
+
+  .card-assignee {
+    width: 20px; height: 20px; border-radius: 50%; font-size: 10px;
+    font-weight: 600; color: #fff; display: inline-flex; align-items: center;
+    justify-content: center;
+  }
+
+  .assignee-zs { background: var(--blue); }
+  .assignee-ls { background: var(--purple); }
+  .assignee-ww { background: var(--coral); }
+  .assignee-zl { background: var(--teal); }
+
+  .card-delete {
+    position: absolute; top: 6px; right: 6px; width: 18px; height: 18px;
+    border-radius: 4px; border: none; background: transparent; color: var(--text-muted);
+    cursor: pointer; font-size: 14px; display: none; align-items: center;
+    justify-content: center; transition: var(--transition);
+  }
+
+  .card:hover .card-delete { display: flex; }
+  .card-delete:hover { background: #fce8e8; color: #E24B4A; }
+  .card.ghost .card-delete { display: none !important; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 30px 16px; color: var(--text-muted); font-size: 12px; text-align: center;
+  }
+  .empty-state svg { margin-bottom: 10px; opacity: 0.3; }
+
+  .connections-layer {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 1;
+  }
+
+  .connections-layer.interactive { pointer-events: auto; }
+
+  .custom-link-line {
+    fill: none; stroke-width: 2.5; stroke-linecap: round; cursor: pointer;
+    transition: stroke-width 0.2s;
+  }
+  .custom-link-line:hover { stroke-width: 4; }
+
+  .custom-link-label {
+    font-size: 10px; font-weight: 500; text-anchor: middle;
+    pointer-events: none; paint-order: stroke; stroke: #fff; stroke-width: 3;
+  }
+
+  .custom-link-dot {
+    animation: linkDot 1.8s linear infinite;
+  }
+  @keyframes linkDot {
+    0% { offset-distance: 0%; opacity: 0.9; }
+    90% { opacity: 0.9; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  .link-delete-hit {
+    fill: transparent; cursor: pointer; pointer-events: auto;
+  }
+
+  .link-tooltip {
+    position: fixed; z-index: 300; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    font-size: 12px; pointer-events: auto; min-width: 180px; display: none;
+  }
+
+  .link-tooltip-header {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 6px;
+  }
+
+  .link-tooltip-body {
+    font-size: 13px; font-weight: 500; margin-bottom: 4px;
+  }
+
+  .link-tooltip-relation {
+    font-size: 11px; color: var(--purple); font-weight: 500; margin-bottom: 8px;
+  }
+
+  .link-tooltip-actions { display: flex; gap: 6px; }
+  .link-tooltip-actions .btn { padding: 3px 10px; font-size: 11px; }
+
+  .progress-badge {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    padding: 3px 10px; font-size: 11px; font-weight: 500;
+    color: var(--text-secondary); white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; z-index: 400; pointer-events: none;
+    animation: toastIn 0.3s ease-out, toastOut 0.3s 1.7s ease-in forwards;
+  }
+
+  @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }
+  @keyframes toastOut { to { opacity: 0; transform: translateX(-50%) translateY(-10px); } }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 200;
+    display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);
+  }
+
+  .modal {
+    background: var(--surface); border-radius: 12px; padding: 24px;
+    width: 440px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    max-height: 85vh; overflow-y: auto;
+  }
+
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .form-group { margin-bottom: 12px; }
+
+  .form-group label {
+    display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; font-family: inherit;
+    transition: var(--transition); background: #fafafa;
+  }
+
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(74,144,217,0.1); background: #fff;
+  }
+
+  .form-group textarea { resize: vertical; min-height: 50px; }
+
+
+  .relation-options { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+
+  .relation-option {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border-radius: 8px; border: 1px solid var(--border); cursor: pointer;
+    transition: var(--transition); background: #fafafa;
+  }
+
+  .relation-option:hover { border-color: var(--purple); background: var(--purple-light); }
+  .relation-option.selected { border-color: var(--purple); background: var(--purple-light); }
+
+  .relation-option-icon {
+    width: 28px; height: 28px; border-radius: 6px; display: flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+
+  .relation-option-text { font-size: 12px; }
+  .relation-option-title { font-weight: 500; }
+  .relation-option-desc { font-size: 10px; color: var(--text-muted); }
+
+  .link-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+
+  .link-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    border-radius: 6px; border: 1px solid var(--border); font-size: 12px;
+    transition: var(--transition);
+  }
+
+  .link-item:hover { border-color: #c0c0c0; background: #fafafa; }
+
+  .link-item-line {
+    width: 24px; height: 2px; border-radius: 1px; flex-shrink: 0;
+  }
+
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+  /* ===== Stage Select Modal ===== */
+  .stage-select-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    margin: 16px 0;
+  }
+  .stage-tab {
+    padding: 14px 10px; border-radius: 12px; border: 2px solid var(--border);
+    background: #fafafa; cursor: pointer; text-align: center;
+    transition: var(--transition); user-select: none;
+  }
+  .stage-tab:hover { border-color: #b0b0c0; background: #f0f0f5; }
+  .stage-tab.selected { border-color: var(--purple); background: var(--purple-light); box-shadow: 0 0 0 3px rgba(124,92,191,0.12); }
+  .stage-tab .stage-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+  .stage-tab .stage-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .stage-tab .stage-count { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .stage-tab.selected .stage-name { color: var(--purple); }
+  .stage-tab.selected .stage-count { color: #8b6bc7; }
+  .stage-confirm-btn { width: 100%; opacity: 0.5; pointer-events: none; }
+  .stage-confirm-btn.active { opacity: 1; pointer-events: auto; }
+
+  .toolbar {
+    padding: 10px 24px 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  }
+
+  .filter-pill {
+    padding: 4px 12px; border-radius: 14px; font-size: 11px; font-weight: 500;
+    border: 1px solid var(--border); background: #fff; cursor: pointer;
+    transition: var(--transition); color: var(--text-secondary);
+  }
+
+  .filter-pill.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+  .stats { display: flex; gap: 14px; margin-left: auto; font-size: 11px; color: var(--text-secondary); }
+  .stat-item { display: flex; align-items: center; gap: 5px; }
+  .stat-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  .legend {
+    display: flex; gap: 14px; align-items: center; font-size: 11px;
+    color: var(--text-muted); margin-left: 16px; flex-wrap: wrap;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+
+  .legend-line-sample {
+    width: 20px; height: 2px; border-radius: 1px; flex-shrink: 0;
+  }
+
+  /* AI Breakdown Panel */
+  .ai-panel {
+    padding: 12px 24px; background: linear-gradient(135deg, #f8f5ff, #f0eaff);
+    border-bottom: 1px solid #e0d5f5; display: flex; gap: 10px; align-items: flex-end;
+  }
+  .ai-panel label { font-size: 12px; font-weight: 600; color: #5a3e8c; white-space: nowrap; }
+  .ai-panel input {
+    flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #d8c8f0;
+    font-size: 13px; outline: none; transition: var(--transition);
+  }
+  .ai-panel input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,92,191,0.08); }
+  .btn-ai {
+    padding: 8px 18px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    background: linear-gradient(135deg, #7C5CBF, #9152d8); color: #fff;
+    border: none; cursor: pointer; transition: var(--transition); white-space: nowrap;
+  }
+  .btn-ai:hover { transform: translateY(-1px); box-shadow: 0 3px 12px rgba(124,92,191,0.3); }
+  .btn-ai:active { transform: scale(0.97); }
+
+  .ai-hint {
+    font-size: 10px; color: #8b7da8; padding: 0 24px 6px;
+    background: #f8f5ff; border-bottom: 1px solid #e0d5f5;
+  }
+
+  /* Design Doc on card */
+  .card-doc-btn {
+    display: inline-flex; align-items: center; gap: 3px; font-size: 10px;
+    padding: 2px 8px; border-radius: 4px; background: #e8f0fe; color: #2a5fa8;
+    border: 1px solid #c0d8f5; cursor: pointer; transition: var(--transition);
+    margin-top: 6px;
+  }
+  .card-doc-btn:hover { background: #d4e4fa; }
+  .card-doc-btn.has-doc { background: #e6f5ef; color: #1d7a55; border-color: #b8e0cf; }
+
+  .doc-modal { max-width: 820px; max-height: 85vh; overflow-y: auto; }
+  .doc-modal h2 { margin-bottom: 4px; }
+  .doc-modal .doc-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 14px; }
+  .doc-section { margin-bottom: 16px; }
+  .doc-section h3 {
+    font-size: 13px; font-weight: 600; color: var(--purple);
+    margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #f0eef5;
+  }
+  .doc-section textarea {
+    width: 100%; min-height: 80px; padding: 10px; border-radius: 8px;
+    border: 1px solid var(--border); font-size: 12px; line-height: 1.6;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif; resize: vertical;
+    outline: none; transition: var(--transition);
+  }
+  .doc-section textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,92,191,0.06); }
+  #doc-disassembly { min-height: 320px; }
+  .doc-section textarea { font-family: 'SF Mono','Fira Code','Consolas',monospace; font-size: 12px; line-height: 1.55; }
+
+  /* Gameplay Framework Panel — White theme */
+  .framework-overlay {
+    position: fixed; inset: 0; background: #f5f5f8; z-index: 9999;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .framework-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px; background: #ffffff; border-bottom: 1px solid #e2e2ea;
+    flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .framework-header h2 {
+    background: linear-gradient(135deg, #6C3FBF, #D85A30);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; font-size: 18px; font-weight: 700;
+  }
+  .framework-header .fw-stats {
+    display: flex; gap: 16px; font-size: 11px; color: #6b7280;
+  }
+  .framework-header .fw-stats span { display: flex; align-items: center; gap: 5px; }
+  .fw-badge {
+    padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;
+  }
+  .fw-badge.ok { background: #d1fae5; color: #065f46; }
+  .fw-badge.warn { background: #fef3c7; color: #92400e; }
+  .fw-close {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid #d4d4dc;
+    background: transparent; color: #6b7280; font-size: 16px; cursor: pointer;
+    transition: 0.2s; display: flex; align-items: center; justify-content: center;
+  }
+  .fw-close:hover { background: #f3f4f6; color: #111; }
+
+  .framework-body {
+    flex: 1; position: relative; overflow: auto;
+    background: #ffffff;
+  }
+
+  .framework-svg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .framework-svg path, .framework-svg circle { pointer-events: none; }
+
+  /* ===== White-base colored-font nodes ===== */
+  .fw-node {
+    position: absolute; transform: translate(-50%, -50%);
+    padding: 12px 18px; border-radius: 16px;
+    cursor: pointer; transition: all 0.3s ease;
+    text-align: center; z-index: 2; user-select: none;
+    min-width: 120px; background: #ffffff;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+  .fw-node:hover { transform: translate(-50%, -50%) scale(1.08); z-index: 10; }
+  /* Battle — 红色系 */
+  .fw-node.battle {
+    color: #c0392b; font-weight: 700; font-size: 14px;
+    border: 2px solid #e74c3c;
+    box-shadow: 0 4px 20px rgba(231,76,60,0.15), 0 0 0 1px rgba(231,76,60,0.1);
+    padding: 20px 30px;
+  }
+  .fw-node.battle:hover {
+    box-shadow: 0 8px 30px rgba(231,76,60,0.25), 0 0 0 2px rgba(231,76,60,0.2);
+  }
+  /* Core — 紫色系 */
+  .fw-node.core {
+    color: #6d28d9; font-size: 16px; font-weight: 700;
+    border: 2px solid #8b5cf6;
+    box-shadow: 0 4px 20px rgba(139,92,246,0.15), 0 0 0 1px rgba(139,92,246,0.1);
+    padding: 20px 30px;
+  }
+  .fw-node.core:hover {
+    box-shadow: 0 8px 30px rgba(139,92,246,0.25), 0 0 0 2px rgba(139,92,246,0.2);
+  }
+  /* Economy — 绿色系 */
+  .fw-node.economy {
+    color: #047857; font-weight: 600; font-size: 13px;
+    border: 2px solid #10b981;
+    box-shadow: 0 4px 18px rgba(16,185,129,0.15), 0 0 0 1px rgba(16,185,129,0.1);
+  }
+  .fw-node.economy:hover {
+    box-shadow: 0 8px 28px rgba(16,185,129,0.25), 0 0 0 2px rgba(16,185,129,0.2);
+  }
+  /* System — 蓝色系 */
+  .fw-node.system {
+    color: #1d4ed8; font-weight: 600; font-size: 13px;
+    border: 2px solid #3b82f6;
+    box-shadow: 0 4px 18px rgba(59,130,246,0.15), 0 0 0 1px rgba(59,130,246,0.1);
+  }
+  .fw-node.system:hover {
+    box-shadow: 0 8px 28px rgba(59,130,246,0.25), 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  /* Infra — 灰色系 */
+  .fw-node.infra {
+    color: #4b5563; font-weight: 500; font-size: 12px;
+    padding: 8px 14px; border: 1.5px solid #9ca3af;
+    box-shadow: 0 2px 10px rgba(156,163,175,0.1), 0 0 0 1px rgba(156,163,175,0.05);
+  }
+  .fw-node.infra:hover {
+    box-shadow: 0 6px 20px rgba(156,163,175,0.2), 0 0 0 2px rgba(156,163,175,0.15);
+  }
+
+  .fw-node .fw-subtitle { font-size: 9px; opacity: 0.55; margin-top: 3px; font-weight: 400; }
+  .fw-node .fw-doc-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: #10b981; margin-left: 6px; vertical-align: middle;
+    box-shadow: 0 0 6px rgba(16,185,129,0.5);
+  }
+
+  .fw-tooltip {
+    position: fixed; padding: 12px 16px; border-radius: 10px;
+    background: #ffffff; border: 1px solid #e2e2ea;
+    color: #374151; font-size: 12px; line-height: 1.6; z-index: 10000;
+    pointer-events: none; max-width: 280px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  }
+  .fw-tooltip strong { color: #6d28d9; }
+
+  .fw-legend {
+    position: absolute; bottom: 20px; left: 20px; display: flex; gap: 16px;
+    font-size: 10px; color: #6b7280; z-index: 5;
+    background: rgba(255,255,255,0.85); padding: 6px 12px; border-radius: 8px;
+    backdrop-filter: blur(4px);
+  }
+  .fw-legend-item { display: flex; align-items: center; gap: 5px; }
+  .fw-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .fw-generate-btn {
+    padding: 8px 18px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    background: #f3f4f6; color: #6b7280;
+    border: 1px solid #d4d4dc; cursor: pointer; transition: 0.2s;
+  }
+  .fw-generate-btn:hover { border-color: #8b5cf6; color: #6d28d9; box-shadow: 0 0 16px rgba(139,92,246,0.15); }
+  .fw-generate-btn.ready {
+    background: linear-gradient(135deg, #7C5CBF, #9152d8); color: #fff;
+    border-color: transparent; animation: fwPulse 2s ease-in-out infinite;
+  }
+  @keyframes fwPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(124,92,191,0.3); }
+    50% { box-shadow: 0 0 24px rgba(124,92,191,0.6); }
+  }
+
+  .fw-flow-line { fill: none; stroke-width: 2; stroke-dasharray: 6 4; }
+  @keyframes fwFlow { to { stroke-dashoffset: -20; } }
+
+  .fw-ring-label {
+    position: absolute; font-size: 9px; color: rgba(0,0,0,0.15);
+    text-transform: uppercase; letter-spacing: 3px; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>需求可视化工作流</h1>
+  <div class="header-actions">
+    <button class="btn" onclick="exportData()">导出</button>
+    <button class="btn" onclick="importDataPrompt()">导入</button>
+    <button class="btn" onclick="openLinkManager()">关联管理</button>
+    <button class="btn" onclick="resetBoard()">重置</button>
+    <button class="btn" onclick="completeAll()">一键完成</button>
+    <button class="btn btn-danger" onclick="deleteAll()">一键删除</button>
+    <button class="btn btn-link-mode" id="linkModeBtn" onclick="toggleLinkMode()">🔗 连线模式</button>
+    <button class="fw-generate-btn" id="fwBtn" onclick="openFramework()" title="设计完成后生成交互玩法框架">🎮 玩法框架</button>
+    <button class="btn btn-primary" onclick="openAddModal()">+ 新增需求</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button class="filter-pill active" onclick="setFilter('all', this)">全部</button>
+  <button class="filter-pill" onclick="setFilter('feature', this)">功能</button>
+  <button class="filter-pill" onclick="setFilter('bug', this)">缺陷</button>
+  <button class="filter-pill" onclick="setFilter('optimize', this)">优化</button>
+  <button class="filter-pill" onclick="setFilter('urgent', this)">紧急</button>
+  <span class="legend">
+    <span class="legend-item"><span class="legend-line-sample" style="background:var(--purple);"></span>依赖</span>
+    <span class="legend-item"><span class="legend-line-sample" style="background:#E24B4A;"></span>阻塞</span>
+    <span class="legend-item"><span class="legend-line-sample" style="background:var(--teal);"></span>关联</span>
+    <span class="legend-item"><span class="legend-line-sample" style="background:var(--amber);"></span>前置</span>
+  </span>
+  <div class="stats">
+    <span class="stat-item"><span class="stat-dot" style="background:#E24B4A"></span>高优 <strong id="high-count">0</strong></span>
+    <span class="stat-item"><span class="stat-dot" style="background:#E8A020"></span>进行中 <strong id="progress-count">0</strong></span>
+    <span class="stat-item"><span class="stat-dot" style="background:#639922"></span>已完成 <strong id="done-count">0</strong></span>
+    <span class="stat-item"><span class="stat-dot" style="background:var(--purple)"></span>关联 <strong id="link-count">0</strong></span>
+  </div>
+</div>
+
+<div class="ai-panel" id="aiPanel">
+  <label>🤖 AI 拆解</label>
+  <input type="text" id="aiInput" placeholder="描述你的需求，例如：做一个卡牌对战游戏、做一个电商后台、做一个社交App..."
+    onkeydown="if(event.key==='Enter')aiBreakdown()">
+  <button class="btn-ai" onclick="aiBreakdown()">⚡ AI 自动拆解</button>
+</div>
+<div class="ai-hint">支持：卡牌游戏 · 电商后台 · 社交App · 项目管理工具 · 短视频平台 · 在线教育 · 金融Dashboard · 医疗预约系统</div>
+
+<div class="board-wrapper" id="boardWrapper">
+  <svg class="connections-layer" id="connectionsSvg"></svg>
+
+  <div class="columns" id="columns">
+    <div class="column" data-status="backlog" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'backlog')">
+      <div class="column-header">
+        <div class="column-header-left">
+          <span class="column-dot" style="background:#94a3b8"></span>
+          <span class="column-title">待处理</span>
+        </div>
+        <span class="column-count" id="count-backlog">0</span>
+      </div>
+      <div class="card-list" id="list-backlog"></div>
+    </div>
+
+    <div class="column" data-status="analyzing" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'analyzing')">
+      <div class="column-header">
+        <div class="column-header-left">
+          <span class="column-dot" style="background:#7C5CBF"></span>
+          <span class="column-title">分析中</span>
+        </div>
+        <span class="column-count" id="count-analyzing">0</span>
+      </div>
+      <div class="card-list" id="list-analyzing"></div>
+    </div>
+
+    <div class="column" data-status="designing" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'designing')">
+      <div class="column-header">
+        <div class="column-header-left">
+          <span class="column-dot" style="background:#4A90D9"></span>
+          <span class="column-title">设计中</span>
+        </div>
+        <span class="column-count" id="count-designing">0</span>
+      </div>
+      <div class="card-list" id="list-designing"></div>
+    </div>
+
+    <div class="column" data-status="developing" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'developing')">
+      <div class="column-header">
+        <div class="column-header-left">
+          <span class="column-dot" style="background:#E8A020"></span>
+          <span class="column-title">开发中</span>
+        </div>
+        <span class="column-count" id="count-developing">0</span>
+      </div>
+      <div class="card-list" id="list-developing"></div>
+    </div>
+
+    <div class="column" data-status="testing" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'testing')">
+      <div class="column-header">
+        <div class="column-header-left">
+          <span class="column-dot" style="background:#D85A30"></span>
+          <span class="column-title">测试中</span>
+        </div>
+        <span class="column-count" id="count-testing">0</span>
+      </div>
+      <div class="card-list" id="list-testing"></div>
+    </div>
+
+    <div class="column" data-status="done" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'done')">
+      <div class="column-header">
+        <div class="column-header-left">
+          <span class="column-dot" style="background:#639922"></span>
+          <span class="column-title">已完成</span>
+        </div>
+        <span class="column-count" id="count-done">0</span>
+      </div>
+      <div class="card-list" id="list-done"></div>
+    </div>
+  </div>
+</div>
+
+<div class="link-tooltip" id="linkTooltip"></div>
+
+<div class="modal-overlay" id="addModal" style="display:none" onclick="if(event.target===this)closeAddModal()">
+  <div class="modal">
+    <h2 id="modalTitle">新增需求</h2>
+    <div class="form-group"><label>需求标题</label><input type="text" id="cardTitle" placeholder="输入需求描述..."></div>
+    <div class="form-group"><label>类型</label>
+      <select id="cardType">
+        <option value="feature">功能需求</option><option value="bug">缺陷修复</option>
+        <option value="optimize">性能优化</option><option value="urgent">紧急需求</option>
+      </select>
+    </div>
+    <div class="form-group"><label>优先级</label>
+      <select id="cardPriority">
+        <option value="low">低</option><option value="medium" selected>中</option><option value="high">高</option>
+      </select>
+    </div>
+    <div class="form-group"><label>负责人</label>
+      <select id="cardAssignee">
+        <option value="zs">张三</option><option value="ls">李四</option><option value="ww">王五</option><option value="zl">赵六</option>
+      </select>
+    </div>
+    <div class="form-group"><label>当前阶段</label>
+      <select id="cardCurrentStage">
+        <option value="backlog">待处理</option><option value="analyzing">分析中</option>
+        <option value="designing">设计中</option><option value="developing">开发中</option>
+        <option value="testing">测试中</option><option value="done">已完成</option>
+      </select>
+    </div>
+    <div class="form-group"><label>备注</label><textarea id="cardDesc" placeholder="详细描述（可选）"></textarea></div>
+    <input type="hidden" id="editingCardId" value="">
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAddModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveCard()">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="linkModal" style="display:none" onclick="if(event.target===this)closeLinkModal()">
+  <div class="modal">
+    <h2 id="linkModalTitle">创建关联</h2>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px" id="linkModalDesc"></p>
+    <div class="form-group"><label>关联类型</label>
+      <div class="relation-options" id="relationOptions">
+        <div class="relation-option selected" data-type="depends" onclick="selectRelation(this)">
+          <div class="relation-option-icon" style="background:var(--purple-light)">→</div>
+          <div class="relation-option-text">
+            <div class="relation-option-title">依赖 (depends on)</div>
+            <div class="relation-option-desc">后者依赖前者完成</div>
+          </div>
+        </div>
+        <div class="relation-option" data-type="blocks" onclick="selectRelation(this)">
+          <div class="relation-option-icon" style="background:#fce8e8">⊘</div>
+          <div class="relation-option-text">
+            <div class="relation-option-title">阻塞 (blocks)</div>
+            <div class="relation-option-desc">前者阻塞后者推进</div>
+          </div>
+        </div>
+        <div class="relation-option" data-type="related" onclick="selectRelation(this)">
+          <div class="relation-option-icon" style="background:var(--teal-light)">~</div>
+          <div class="relation-option-text">
+            <div class="relation-option-title">关联 (related to)</div>
+            <div class="relation-option-desc">两者存在逻辑关联</div>
+          </div>
+        </div>
+        <div class="relation-option" data-type="precedes" onclick="selectRelation(this)">
+          <div class="relation-option-icon" style="background:var(--amber-light)">▶</div>
+          <div class="relation-option-text">
+            <div class="relation-option-title">前置 (precedes)</div>
+            <div class="relation-option-desc">前者必须在后者之前完成</div>
+          </div>
+        </div>
+        <div class="relation-option" data-type="duplicates" onclick="selectRelation(this)">
+          <div class="relation-option-icon" style="background:#f0f0f0">≅</div>
+          <div class="relation-option-text">
+            <div class="relation-option-title">重复 (duplicates)</div>
+            <div class="relation-option-desc">两者为相似/重复需求</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-group"><label>备注（可选）</label><input type="text" id="linkLabel" placeholder="例如：登录重构后才能做支付"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeLinkModal()">取消</button>
+      <button class="btn btn-primary" onclick="confirmCreateLink()">创建关联</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="linkManagerModal" style="display:none" onclick="if(event.target===this)closeLinkManager()">
+  <div class="modal">
+    <h2>关联管理</h2>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">管理所有自定义关联线</p>
+    <div class="link-list" id="linkList"></div>
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="btn btn-danger" onclick="clearAllLinks()">清除全部关联</button>
+      <button class="btn" onclick="closeLinkManager()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="docModal" style="display:none" onclick="if(event.target===this)closeDocModal()">
+  <div class="modal doc-modal">
+    <h2 id="docModalTitle">策划文档</h2>
+    <div class="doc-meta" id="docMeta"></div>
+    <div id="docSections"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDocModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveDesignDoc()">保存文档</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="modal-overlay" id="confirmModal" style="display:none">
+  <div class="modal" style="width:360px;text-align:center;padding:32px 24px">
+    <p id="confirmMsg" style="font-size:14px;line-height:1.6;color:var(--text);margin:0 0 24px"></p>
+    <div class="modal-actions" style="justify-content:center;gap:12px">
+      <button class="btn" onclick="closeConfirmModal()">取消</button>
+      <button class="btn btn-danger" id="confirmOkBtn">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stage Select Modal -->
+<div class="modal-overlay" id="stageSelectModal" style="display:none" onclick="if(event.target===this)closeStageSelect()">
+  <div class="modal" style="width:480px;padding:28px 24px 20px">
+    <h3 style="margin:0 0 4px;font-size:16px;color:var(--text)">批量更新阶段</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 4px">选择目标阶段，一键应用到全部 <strong id="stageSelectCount">0</strong> 条需求</p>
+    <div class="stage-select-grid" id="stageSelectGrid"></div>
+    <div class="modal-actions" style="justify-content:center;gap:12px">
+      <button class="btn" onclick="closeStageSelect()">取消</button>
+      <button class="btn btn-primary stage-confirm-btn" id="stageConfirmBtn" onclick="applyStageToAll()" disabled>确认更新</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gameplay Framework Overlay -->
+<div class="framework-overlay" id="frameworkOverlay" style="display:none">
+  <div class="framework-header">
+    <h2>🎮 交互玩法框架 — 卡牌对战游戏</h2>
+    <div class="fw-stats">
+      <span id="fwStatNodes">节点 0</span>
+      <span id="fwStatLinks">连线 0</span>
+      <span id="fwStatDocs">📄 文档覆盖率 0%</span>
+    </div>
+    <button class="fw-close" onclick="closeFramework()" title="关闭">✕</button>
+  </div>
+  <div class="framework-body" id="frameworkBody">
+    <svg class="framework-svg" id="frameworkSvg"></svg>
+    <div id="fwNodesContainer"></div>
+    <div class="fw-legend" id="fwLegend"></div>
+    <div class="fw-tooltip" id="fwTooltip" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const statusNames = { backlog:'待处理',analyzing:'分析中',designing:'设计中',developing:'开发中',testing:'测试中',done:'已完成' };
+const typeNames = { feature:'功能',bug:'缺陷',optimize:'优化',urgent:'紧急' };
+const stageNames = { backlog:'待处理',analyzing:'分析中',designing:'设计中',developing:'开发中',testing:'测试中',done:'已完成' };
+const assigneeNames = { zs:'张三',ls:'李四',ww:'王五',zl:'赵六' };
+const assigneeClasses = { zs:'assignee-zs',ls:'assignee-ls',ww:'assignee-ww',zl:'assignee-zl' };
+
+const relationColors = {
+  depends: { stroke:'#7C5CBF', bg:'var(--purple-light)', dash:'none', label:'依赖' },
+  blocks: { stroke:'#E24B4A', bg:'#fce8e8', dash:'6 3', label:'阻塞' },
+  related: { stroke:'#1D9E75', bg:'var(--teal-light)', dash:'none', label:'关联' },
+  precedes: { stroke:'#E8A020', bg:'var(--amber-light)', dash:'4 4', label:'前置' },
+  duplicates: { stroke:'#94a3b8', bg:'#f0f0f0', dash:'3 5', label:'重复' }
+};
+
+const defaultRequirements = [
+  { id:'1',title:'用户登录页面重构',type:'feature',priority:'high',assignee:'zs',currentStage:'developing',desc:'完成登录表单UI升级，含手机号+邮箱双通道' },
+  { id:'2',title:'订单支付超时异常修复',type:'bug',priority:'high',assignee:'ls',currentStage:'testing',desc:'支付回调超时30s后订单状态未更新' },
+  { id:'3',title:'首页加载速度优化',type:'optimize',priority:'medium',assignee:'ww',currentStage:'analyzing',desc:'首屏加载从3.2s优化到1s以内' },
+  { id:'4',title:'数据导出支持Excel格式',type:'feature',priority:'medium',assignee:'zl',currentStage:'designing',desc:'后台数据报表新增.xlsx导出' },
+  { id:'5',title:'SSL证书更新与监控',type:'urgent',priority:'high',assignee:'zs',currentStage:'done',desc:'生产环境证书6月15日到期，已完成自动续期' },
+  { id:'6',title:'搜索框支持模糊匹配',type:'feature',priority:'low',assignee:'ls',currentStage:'backlog',desc:'用户输入拼音首字母也能匹配中文' },
+  { id:'7',title:'消息通知实时推送',type:'feature',priority:'medium',assignee:'zl',currentStage:'backlog',desc:'WebSocket 接入，支持桌面通知' },
+];
+
+const defaultLinks = [
+  { id:'l1',from:'2',to:'1',type:'depends',label:'支付异常需要登录模块支持' },
+  { id:'l2',from:'4',to:'1',type:'related',label:'导出使用的表格组件与登录表单来自同一设计系统' },
+  { id:'l3',from:'7',to:'6',type:'precedes',label:'通知推送需要搜索索引支持' },
+  { id:'l4',from:'3',to:'5',type:'blocks',label:'首页加载慢导致证书页面无法访问' },
+];
+
+let requirements = [];
+let customLinks = [];
+let currentFilter = 'all';
+let nextId = 100;
+let linkMode = false;
+let linkSourceId = null;
+let nextLinkId = 200;
+
+function loadData() {
+  const savedReqs = localStorage.getItem('workflow-requirements');
+  const savedLinks = localStorage.getItem('workflow-links');
+  requirements = savedReqs ? JSON.parse(savedReqs) : JSON.parse(JSON.stringify(defaultRequirements));
+  customLinks = savedLinks ? JSON.parse(savedLinks) : JSON.parse(JSON.stringify(defaultLinks));
+  // 修复：启动时从已有数据推导 nextId / nextLinkId，防止 ID 冲突
+  if (requirements.length > 0) {
+    nextId = Math.max(...requirements.map(r => parseInt(r.id) || 0)) + 1;
+  }
+  if (customLinks.length > 0) {
+    nextLinkId = Math.max(...customLinks.map(l => parseInt(String(l.id).replace(/^l/, '')) || 0)) + 1;
+  }
+  if (!savedReqs) saveAll();
+}
+
+function saveAll() {
+  localStorage.setItem('workflow-requirements', JSON.stringify(requirements));
+  localStorage.setItem('workflow-links', JSON.stringify(customLinks));
+}
+
+function getCardsForColumn(status) {
+  return requirements.filter(req => {
+    if (currentFilter !== 'all' && req.type !== currentFilter) return false;
+    return req.currentStage === status;
+  });
+}
+
+function getLinkCount(reqId) {
+  return customLinks.filter(l => l.from === reqId || l.to === reqId).length;
+}
+
+function renderBoard() {
+  const statuses = ['backlog','analyzing','designing','developing','testing','done'];
+
+  // 统一计数（之前放在 forEach 循环里导致重复累加 6 倍）
+  let highCount = 0, progressCount = 0, doneCount = 0;
+  requirements.forEach(r => {
+    if (currentFilter !== 'all' && r.type !== currentFilter) return;
+    if (r.currentStage === 'done') doneCount++;
+    if (r.currentStage !== 'backlog' && r.currentStage !== 'done') progressCount++;
+    if (r.priority === 'high' && r.currentStage !== 'done') highCount++;
+  });
+
+  statuses.forEach(status => {
+    const cards = getCardsForColumn(status);
+    const list = document.getElementById('list-'+status);
+    document.getElementById('count-'+status).textContent = cards.length;
+
+    if (cards.length===0) {
+      list.innerHTML = '<div class="empty-state"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>拖拽需求卡片到此处</div>';
+    } else {
+      list.innerHTML = cards.map(c => {
+        const linkCnt = getLinkCount(c.id);
+        const cls = ['card', 'current', 'priority-'+c.priority];
+        if (linkMode) cls.push('linkable');
+
+        return `<div class="${cls.join(' ')}" draggable="${!linkMode}" data-id="${c.id}" data-status="${status}"
+          ${!linkMode?`ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)"`:''}
+          ${linkMode?`onclick="handleLinkClick(event, '${c.id}')"`:''}>
+          <button class="card-delete" onclick="deleteRequirement('${c.id}',event)" title="删除">&times;</button>
+          <div class="card-tags">
+            <span class="tag tag-${c.type}">${typeNames[c.type]}</span>
+            ${c.priority==='high'?'<span class="tag tag-urgent">高优</span>':''}
+            ${linkCnt>0?`<span class="tag-link-count">${linkCnt}条关联</span>`:''}
+          </div>
+          <div class="card-title">${escapeHtml(c.title)}</div>
+          <div class="card-meta"><span class="card-assignee ${assigneeClasses[c.assignee]}">${assigneeNames[c.assignee][0]}</span><span>${assigneeNames[c.assignee]}</span></div>
+          <button class="card-doc-btn ${c.designDoc?'has-doc':''}" onclick="openDesignDoc('${c.id}',event)" title="策划文档">📄 ${c.designDoc?'已写文档':'策划文档'}</button>
+        </div>`;
+      }).join('');
+    }
+  });
+
+  document.getElementById('high-count').textContent = highCount;
+  document.getElementById('progress-count').textContent = progressCount;
+  document.getElementById('done-count').textContent = doneCount;
+  document.getElementById('link-count').textContent = customLinks.length;
+
+  requestAnimationFrame(() => drawConnections());
+}
+
+function drawConnections() {
+  const svg = document.getElementById('connectionsSvg');
+  const wrapper = document.getElementById('boardWrapper');
+  const wrapperRect = wrapper.getBoundingClientRect();
+
+  svg.setAttribute('width', wrapper.scrollWidth||wrapper.offsetWidth);
+  svg.setAttribute('height', wrapper.scrollHeight||wrapper.offsetHeight);
+  svg.style.width = (wrapper.scrollWidth||wrapper.offsetWidth)+'px';
+  svg.style.height = (wrapper.scrollHeight||wrapper.offsetHeight)+'px';
+
+  let html = '';
+
+  // Custom association lines
+  customLinks.forEach(link => {
+    const rel = relationColors[link.type] || relationColors.related;
+    const fromReq = requirements.find(r=>r.id===link.from);
+    const toReq = requirements.find(r=>r.id===link.to);
+    if (!fromReq||!toReq) return;
+    if (currentFilter!=='all'&&(fromReq.type!==currentFilter||toReq.type!==currentFilter)) return;
+
+    // Find visible cards for custom links
+    const fromCard = document.querySelector(`.card[data-id="${link.from}"]`);
+    const toCard = document.querySelector(`.card[data-id="${link.to}"]`);
+    if (!fromCard||!toCard) return;
+
+    const fromRect=fromCard.getBoundingClientRect(), toRect=toCard.getBoundingClientRect();
+    // Anchor points: connect from right edge of source to left edge of target
+    const x1=fromRect.right-wrapperRect.left, y1=fromRect.top+fromRect.height/2-wrapperRect.top;
+    const x2=toRect.left-wrapperRect.left, y2=toRect.top+toRect.height/2-wrapperRect.top;
+
+    // Use curved path
+    const midX=(x1+x2)/2;
+    const curveOffset = Math.abs(y2-y1)*0.15;
+    const pathD = `M${x1},${y1} C${midX},${y1-curveOffset} ${midX},${y2+curveOffset} ${x2},${y2}`;
+
+    html += `<path d="${pathD}" class="custom-link-line" style="stroke:${rel.stroke};stroke-dasharray:${rel.dash};stroke-width:2.5;opacity:0.7" data-link-id="${link.id}"/>`;
+
+    // Label badge at midpoint
+    const mx=(x1+x2)/2, my=(y1+y2)/2;
+    html += `<rect x="${mx-22}" y="${my-10}" width="44" height="20" rx="10" fill="#fff" stroke="${rel.stroke}" stroke-width="1" opacity="0.95"/>
+      <text x="${mx}" y="${my+1}" class="custom-link-label" fill="${rel.stroke}" font-size="10" font-weight="500" text-anchor="middle" dominant-baseline="central">${rel.label}</text>`;
+
+    // Hit area for click
+    html += `<path d="${pathD}" class="link-delete-hit" style="stroke:transparent;stroke-width:8;fill:none;cursor:pointer;pointer-events:auto" data-link-id="${link.id}" onmouseenter="showLinkTooltip(event,'${link.id}')" onmouseleave="hideLinkTooltip()"/>`;
+
+    // Animated dot
+    html += `<circle r="3.5" fill="${rel.stroke}" opacity="0.85" class="custom-link-dot" style="offset-path:path('${pathD}');animation-delay:${Math.random()*1.5}s"/>`;
+  });
+
+  svg.innerHTML = html;
+}
+
+// Link mode
+function toggleLinkMode() {
+  linkMode = !linkMode;
+  linkSourceId = null;
+  const btn = document.getElementById('linkModeBtn');
+  if (linkMode) {
+    btn.classList.add('active');
+    btn.innerHTML = '⚡ 连线中...';
+    showToast('点击一个卡片作为连线起点，再点击目标卡片创建关联');
+  } else {
+    btn.classList.remove('active');
+    btn.innerHTML = '🔗 连线模式';
+    document.querySelectorAll('.card.link-source').forEach(c => c.classList.remove('link-source'));
+  }
+  renderAll();
+}
+
+function handleLinkClick(e, cardId) {
+  e.stopPropagation();
+  e.preventDefault();
+
+  if (!linkSourceId) {
+    linkSourceId = cardId;
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('link-source'));
+    const card = document.querySelector(`.card[data-id="${cardId}"]`);
+    if (card) card.classList.add('link-source');
+    const req = requirements.find(r => r.id === cardId);
+    showToast(`已选中「${req.title}」，请点击目标卡片`);
+  } else {
+    if (cardId === linkSourceId) {
+      linkSourceId = null;
+      document.querySelectorAll('.card.link-source').forEach(c => c.classList.remove('link-source'));
+      showToast('已取消选择');
+      return;
+    }
+    openLinkModal(linkSourceId, cardId);
+    linkSourceId = null;
+    document.querySelectorAll('.card.link-source').forEach(c => c.classList.remove('link-source'));
+  }
+}
+
+function openLinkModal(fromId, toId) {
+  const fromReq = requirements.find(r => r.id === fromId);
+  const toReq = requirements.find(r => r.id === toId);
+  document.getElementById('linkModalTitle').textContent = '创建关联';
+  document.getElementById('linkModalDesc').innerHTML = `<strong>${escapeHtml(fromReq.title)}</strong> → <strong>${escapeHtml(toReq.title)}</strong>`;
+  document.getElementById('linkModal').dataset.from = fromId;
+  document.getElementById('linkModal').dataset.to = toId;
+  document.getElementById('linkLabel').value = '';
+  document.querySelectorAll('#relationOptions .relation-option').forEach((el,i) => {
+    el.classList.toggle('selected', i===0);
+  });
+  document.getElementById('linkModal').style.display = 'flex';
+}
+
+function closeLinkModal() {
+  document.getElementById('linkModal').style.display = 'none';
+}
+
+function selectRelation(el) {
+  document.querySelectorAll('#relationOptions .relation-option').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function confirmCreateLink() {
+  const modal = document.getElementById('linkModal');
+  const fromId = modal.dataset.from;
+  const toId = modal.dataset.to;
+  const typeEl = document.querySelector('#relationOptions .relation-option.selected');
+  const type = typeEl ? typeEl.dataset.type : 'depends';
+  const label = document.getElementById('linkLabel').value.trim();
+
+  const existing = customLinks.find(l => l.from===fromId && l.to===toId);
+  if (existing) {
+    if (!confirm('这两张卡片之间已有关联，要更新吗？')) return;
+    existing.type = type;
+    existing.label = label;
+  } else {
+    customLinks.push({ id: 'l'+(nextLinkId++), from:fromId, to:toId, type, label });
+  }
+
+  saveAll();
+  renderAll();
+  closeLinkModal();
+  showToast('关联已创建 ✓');
+}
+
+// Link tooltip
+function showLinkTooltip(e, linkId) {
+  const link = customLinks.find(l => l.id === linkId);
+  if (!link) return;
+  const fromReq = requirements.find(r => r.id === link.from);
+  const toReq = requirements.find(r => r.id === link.to);
+  const rel = relationColors[link.type] || relationColors.related;
+  const tip = document.getElementById('linkTooltip');
+  tip.innerHTML = `
+    <div class="link-tooltip-header">自定义关联</div>
+    <div class="link-tooltip-body">${escapeHtml(fromReq?.title||'?')} → ${escapeHtml(toReq?.title||'?')}</div>
+    <div class="link-tooltip-relation" style="color:${rel.stroke}">关系：${rel.label}</div>
+    ${link.label?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${escapeHtml(link.label)}</div>`:''}
+    <div class="link-tooltip-actions">
+      <button class="btn btn-danger" style="font-size:10px;padding:2px 8px" onclick="deleteLink('${link.id}')">删除关联</button>
+    </div>
+  `;
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX+12)+'px';
+  tip.style.top = (e.clientY-10)+'px';
+}
+
+function hideLinkTooltip() {
+  const tip = document.getElementById('linkTooltip');
+  setTimeout(() => {
+    if (!tip.matches(':hover')) tip.style.display = 'none';
+  }, 150);
+}
+
+document.getElementById('linkTooltip').addEventListener('mouseleave', function(){
+  this.style.display = 'none';
+});
+
+function deleteLink(linkId) {
+  customLinks = customLinks.filter(l => l.id !== linkId);
+  saveAll();
+  renderAll();
+  document.getElementById('linkTooltip').style.display = 'none';
+  showToast('关联已删除');
+}
+
+function openLinkManager() {
+  const list = document.getElementById('linkList');
+  if (customLinks.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:20px">暂无自定义关联</div>';
+  } else {
+    list.innerHTML = customLinks.map(l => {
+      const fromReq = requirements.find(r=>r.id===l.from);
+      const toReq = requirements.find(r=>r.id===l.to);
+      const rel = relationColors[l.type]||relationColors.related;
+      return `<div class="link-item">
+        <span class="link-item-line" style="background:${rel.stroke}"></span>
+        <span style="font-size:10px;color:${rel.stroke};font-weight:500;min-width:30px">${rel.label}</span>
+        <span style="flex:1;font-size:11px">${escapeHtml(fromReq?.title||'?')} → ${escapeHtml(toReq?.title||'?')}</span>
+        <button class="btn" style="padding:2px 8px;font-size:10px" onclick="deleteLink('${l.id}');closeLinkManager()">删除</button>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('linkManagerModal').style.display = 'flex';
+}
+
+function closeLinkManager() {
+  document.getElementById('linkManagerModal').style.display = 'none';
+}
+
+function clearAllLinks() {
+  if (confirm('确定删除所有自定义关联？此操作不可恢复。')) {
+    customLinks = [];
+    saveAll();
+    renderAll();
+    closeLinkManager();
+    showToast('所有关联已清除');
+  }
+}
+
+// Drag and drop (disabled in link mode)
+function handleDragStart(e) {
+  if (linkMode) { e.preventDefault(); return; }
+  draggedCard = e.target.closest('.card');
+  if (!draggedCard) return;
+  draggedCard.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', draggedCard.dataset.id);
+}
+
+function handleDragEnd(e) {
+  if (draggedCard) draggedCard.classList.remove('dragging');
+  draggedCard = null;
+  document.querySelectorAll('.column').forEach(c => c.classList.remove('drag-over'));
+}
+
+function handleDragOver(e) {
+  if (linkMode) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const col = e.target.closest('.column');
+  if (col) col.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  const col = e.target.closest('.column');
+  if (col) col.classList.remove('drag-over');
+}
+
+function handleDrop(e, status) {
+  e.preventDefault();
+  const col = e.target.closest('.column');
+  if (col) col.classList.remove('drag-over');
+  const cardId = e.dataTransfer.getData('text/plain');
+  if (!cardId) return;
+  const req = requirements.find(r => r.id === cardId);
+  if (!req) return;
+  if (req.currentStage === status) return;
+  req.currentStage = status;
+  saveAll();
+  renderAll();
+  draggedCard = null;
+}
+
+// Card CRUD
+function openAddModal(editId) {
+  document.getElementById('editingCardId').value = editId||'';
+  document.getElementById('modalTitle').textContent = editId?'编辑需求':'新增需求';
+  document.getElementById('cardTitle').value = '';
+  document.getElementById('cardType').value = 'feature';
+  document.getElementById('cardPriority').value = 'medium';
+  document.getElementById('cardAssignee').value = 'zs';
+  document.getElementById('cardCurrentStage').value = 'backlog';
+  document.getElementById('cardDesc').value = '';
+  if (editId) {
+    const req = requirements.find(r=>r.id===editId);
+    if (req) {
+      document.getElementById('cardTitle').value = req.title;
+      document.getElementById('cardType').value = req.type;
+      document.getElementById('cardPriority').value = req.priority;
+      document.getElementById('cardAssignee').value = req.assignee;
+      document.getElementById('cardCurrentStage').value = req.currentStage;
+      document.getElementById('cardDesc').value = req.desc||'';
+    }
+  }
+  document.getElementById('addModal').style.display = 'flex';
+  document.getElementById('cardTitle').focus();
+}
+
+function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+
+function saveCard() {
+  const title = document.getElementById('cardTitle').value.trim();
+  if (!title) { document.getElementById('cardTitle').focus(); return; }
+  const currentStage = document.getElementById('cardCurrentStage').value;
+  const data = {
+    title, type:document.getElementById('cardType').value,
+    priority:document.getElementById('cardPriority').value,
+    assignee:document.getElementById('cardAssignee').value,
+    currentStage,
+    desc:document.getElementById('cardDesc').value.trim()
+  };
+  const editId = document.getElementById('editingCardId').value;
+  if (editId) {
+    const idx = requirements.findIndex(r=>r.id===editId);
+    if (idx>=0) requirements[idx] = {...requirements[idx],...data};
+  } else {
+    requirements.push({id:String(nextId++),...data});
+  }
+  saveAll();
+  renderAll();
+  closeAddModal();
+}
+
+function deleteRequirement(id, event) {
+  event.stopPropagation(); event.preventDefault();
+  requirements = requirements.filter(r=>r.id!==id);
+  customLinks = customLinks.filter(l=>l.from!==id&&l.to!==id);
+  saveAll();
+  renderAll();
+}
+
+function setFilter(type, el) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showToast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+function exportData() {
+  const data = JSON.stringify({requirements,customLinks},null,2);
+  const blob = new Blob([data],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='workflow-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function importDataPrompt() {
+  const input = document.createElement('input');
+  input.type='file'; input.accept='.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const reqs = data.requirements||data;
+        if (Array.isArray(reqs)&&reqs.length&&reqs[0].id&&reqs[0].currentStage) {
+          requirements = reqs;
+          customLinks = data.customLinks||[];
+          nextId = Math.max(...requirements.map(r=>parseInt(r.id)||0),99)+1;
+          nextLinkId = Math.max(...customLinks.map(l=>parseInt(String(l.id).replace('l',''))||0),199)+1;
+          saveAll();
+          renderAll();
+          alert('导入成功，共 '+reqs.length+' 条需求、'+customLinks.length+' 条关联');
+        } else { alert('文件格式不正确'); }
+      } catch(err) { alert('解析失败：'+err.message); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function resetBoard() {
+  if (!confirm('确定重置为默认示例？所有自定义数据将丢失。')) return;
+
+  // 1. 先退出连线模式（避免 toggleLinkMode 内部的 renderAll 基于旧数据渲染）
+  if (linkMode) {
+    linkMode = false;
+    linkSourceId = null;
+    const btn = document.getElementById('linkModeBtn');
+    if (btn) { btn.classList.remove('active'); btn.innerHTML = '🔗 连线模式'; }
+  }
+
+  // 2. 彻底清空内存 + localStorage
+  requirements = [];
+  customLinks = [];
+  localStorage.removeItem('workflow-requirements');
+  localStorage.removeItem('workflow-links');
+
+  // 3. 写入默认数据
+  requirements = JSON.parse(JSON.stringify(defaultRequirements));
+  customLinks = JSON.parse(JSON.stringify(defaultLinks));
+  nextId = 100;
+  nextLinkId = 200;
+  currentFilter = 'all';
+
+  // 4. 持久化
+  saveAll();
+
+  // 5. 恢复筛选按钮状态
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  const firstPill = document.querySelector('.filter-pill');
+  if (firstPill) firstPill.classList.add('active');
+
+  // 6. 渲染
+  renderAll();
+  showToast('已重置为默认示例');
+}
+
+function completeAll() {
+  showStageSelect();
+}
+
+// ===== 阶段选择弹窗 =====
+let selectedStage = null;
+function showStageSelect() {
+  selectedStage = null;
+  document.getElementById('stageSelectCount').textContent = requirements.length;
+  const grid = document.getElementById('stageSelectGrid');
+  const stageIcons = { backlog:'📋', analyzing:'🔍', designing:'🎨', developing:'⚙️', testing:'🧪', done:'✅' };
+  const stageColors = { backlog:'#9ca3af', analyzing:'#f59e0b', designing:'#8b5cf6', developing:'#3b82f6', testing:'#10b981', done:'#ec4899' };
+  let html = '';
+  for (const [key, name] of Object.entries(stageNames)) {
+    const count = requirements.filter(r => r.currentStage === key).length;
+    html += `<div class="stage-tab" data-stage="${key}" onclick="selectStage('${key}', this)" style="--sc:${stageColors[key]}">
+      <span class="stage-icon">${stageIcons[key]}</span>
+      <span class="stage-name">${name}</span>
+      <span class="stage-count">当前 ${count} 条</span>
+    </div>`;
+  }
+  grid.innerHTML = html;
+  document.getElementById('stageConfirmBtn').disabled = true;
+  document.getElementById('stageConfirmBtn').classList.remove('active');
+  document.getElementById('stageSelectModal').style.display = 'flex';
+}
+function selectStage(key, el) {
+  selectedStage = key;
+  document.querySelectorAll('.stage-tab').forEach(t => t.classList.remove('selected'));
+  el.classList.add('selected');
+  const btn = document.getElementById('stageConfirmBtn');
+  btn.disabled = false;
+  btn.classList.add('active');
+  btn.textContent = '确认更新为「' + stageNames[key] + '」';
+}
+function closeStageSelect() {
+  document.getElementById('stageSelectModal').style.display = 'none';
+  selectedStage = null;
+}
+function applyStageToAll() {
+  if (!selectedStage) return;
+  requirements.forEach(r => r.currentStage = selectedStage);
+  exitLinkMode();
+  saveAll();
+  renderAll();
+  closeStageSelect();
+  showToast('全部 ' + requirements.length + ' 条需求已更新为「' + stageNames[selectedStage] + '」');
+}
+
+// ===== 自定义确认弹窗（替代原生 confirm） =====
+function showConfirm(msg, onOk, okText) {
+  document.getElementById('confirmMsg').textContent = msg;
+  const okBtn = document.getElementById('confirmOkBtn');
+  okBtn.textContent = okText || '确认删除';
+  okBtn.onclick = function() {
+    closeConfirmModal();
+    if (onOk) onOk();
+  };
+  document.getElementById('confirmModal').style.display = 'flex';
+}
+function closeConfirmModal() {
+  document.getElementById('confirmModal').style.display = 'none';
+}
+
+function deleteAll() {
+  showConfirm('⚠️ 确定删除所有需求和关联？此操作不可恢复！', function() {
+    requirements = [];
+    customLinks = [];
+    nextId = 100;
+    nextLinkId = 200;
+    exitLinkMode();
+    localStorage.removeItem('workflow-requirements');
+    localStorage.removeItem('workflow-links');
+    renderAll();
+    showToast('所有卡片和关联已清除');
+  });
+}
+
+function exitLinkMode() {
+  if (!linkMode) return;
+  linkMode = false;
+  linkSourceId = null;
+  const btn = document.getElementById('linkModeBtn');
+  if (btn) { btn.classList.remove('active'); btn.innerHTML = '🔗 连线模式'; }
+}
+
+// AI Breakdown
+const aiTemplates = {
+  cardGame: {
+    cards: [
+      { title:'核心对战逻辑系统', type:'feature', priority:'high', assignee:'zs', desc:'回合制对战、伤害计算、技能触发、胜负判定', doc:{ overview:'构建游戏的核心对战引擎，所有其他系统围绕对战展开。目标：提供流畅、公平、有深度的回合制卡牌对战体验，支持PvP和PvE两种模式。', flow:'1. 玩家匹配/进入关卡 → 2. 先后手判定（随机/属性加成）→ 3. 初始抽牌（3-5张）→ 4. 回合循环：抽牌→出牌→技能触发→结算→对手回合 → 5. 一方生命归零或卡组抽空 → 6. 胜负判定与奖励结算', ui:'● 主界面：手牌区（底部弧形排列）、战场区（中部）、牌库/墓地（左右侧）\n● 卡牌拖拽出牌，支持双击快速使用\n● 技能特效以粒子动画呈现，伤害数字浮动飘出\n● 回合倒计时条（默认60秒）位于顶部', data:'● 标准生命值：30点（可配置）\n● 初始手牌：3张，后手额外1张\n● 单回合法力水晶：1→10递增\n● 卡组容量：30张，同名卡上限2张（传说1张）\n● 伤害公式：攻击力 - 护甲值（最低1点）', tech:'● 服务端权威计算，客户端只做展示和输入\n● 状态机驱动：WAITING → MULLIGAN → PLAYER_TURN → OPPONENT_TURN → GAME_OVER\n● 技能系统使用事件驱动架构，支持链式触发\n● 战斗回放：指令序列录制 + 快照校验', acceptance:'□ PvP对战完整走通，无卡死/掉线异常\n□ 技能触发链正确，无遗漏/重复触发\n□ 1000次自动对战中无逻辑死循环\n□ 客户端与服务端状态始终保持一致' } },
+      { title:'卡牌收集与养成系统', type:'feature', priority:'high', assignee:'ls', desc:'卡牌获取、升级进化、稀有度体系、图鉴收藏', doc:{ overview:'卡牌是游戏的核心资产。收集系统负责卡牌的获取途径管理，养成系统负责卡牌的成长升级。目标：提供多层次的收集成就感和养成深度，同时确保非付费玩家有合理的获取节奏。', flow:'1. 获取卡牌（商城购买/任务奖励/对战胜场/活动赠送）→ 2. 卡牌入库（自动整理到收藏夹）→ 3. 卡牌成长：消耗同名卡+金币升级 → 进化（达到等级上限+消耗进化材料）→ 4. 图鉴解锁：获得新卡自动点亮图鉴 → 集齐系列获得收藏奖励', ui:'● 卡牌展示：卡面正面（精美插画）、背面（稀有度边框+粒子）\n● 稀有度标识：白→蓝→紫→橙→虹（不同边框、光效）\n● 升级界面：双栏对比（升级前/后属性变化）\n● 图鉴：九宫格+进度条+系列收集度百分比', data:'● 稀有度分级：N(60%)/R(25%)/SR(10%)/SSR(4%)/UR(1%)\n● 满级设定：N-20级, R-30级, SR-40级, SSR-50级, UR-60级\n● 升级消耗 = 基础金币×(当前等级×稀有度系数)\n● 进化：满级卡 + 3张同名卡 + 进化石', tech:'● 卡牌数据使用 ScriptableObject / 配置表驱动\n● 属性计算：基础值 + 等级成长×系数 + 进化加成\n● 获取记录需服务端登记（防刷）\n● 图鉴数据客户端缓存+服务端同步', acceptance:'□ 所有稀有度卡牌获取、升级、进化的数值在±1%偏差内\n□ 重复卡牌正确处理（自动分解/合成系统）\n□ 图鉴解锁条件准确，无遗漏' } },
+      { title:'卡组编辑与构建工具', type:'feature', priority:'high', assignee:'ww', desc:'卡牌筛选、卡组保存/导入/导出、构筑分析', doc:{ overview:'为玩家提供直观、高效的卡组构筑体验。目标：支持快速筛选组合、分析卡组构成、一键分享与导入，降低新手构筑门槛，提升高手构筑效率。', flow:'1. 进入卡组编辑 → 2. 选择已有卡组或新建 → 3. 卡池筛选（职业/费用/稀有度/关键词检索）→ 4. 拖拽卡牌到卡组槽位（30/30限制）→ 5. 构筑分析（法力曲线图/卡牌类型占比）→ 6. 保存 → 7. 生成分享码/导出卡组代码', ui:'● 左侧：卡池列表（可展开筛选条件）\n● 右侧：卡组槽位（30格）\n● 底部：法力曲线柱状图（0-10费）\n● 顶部工具栏：新建/导入/复制卡组代码/分享', data:'● 卡组代码格式：Base64编码的压缩ID序列\n● 构筑规则：30张整，同卡上限2/传说1\n● 法力曲线分析：按费用分组统计卡牌数量\n● 卡组评分算法：曲线平滑度+核心combo数+胜率参考', tech:'● 拖拽使用 HTML5 Drag & Drop\n● 卡组代码编解码：压缩ID列表 → Base64\n● 构筑分析实时计算，debounce 300ms\n● 分享功能：生成短链 + 一键复制', acceptance:'□ 卡组构建器流畅拖拽，无卡顿\n□ 卡组代码导入导出无误差\n□ 法力曲线图实时更新，数据准确\n□ 筛选条件组合无遗漏' } },
+      { title:'匹配与排位系统', type:'feature', priority:'medium', assignee:'zl', desc:'MMR匹配、段位设计、赛季重置、排行榜', doc:{ overview:'保障玩家对战公平性的核心系统。目标：基于MMR算法实现快速、公平的对手匹配，通过段位体系提供清晰的目标感和成就感，配合赛季机制保持长期活跃。', flow:'1. 玩家点击"开始匹配" → 2. 系统计算MMR + 等待时间加权 → 3. 匹配池中寻找±XX分对手 → 4. 找到对手 → 5. 进入对战 → 6. 对战结束 → 7. 结算段位分+段位升降 → 8. 排行更新 → 9. 赛季结束发奖励+段位重置', ui:'● 匹配界面：搜索动画（旋转卡牌） + 预估等待时间\n● 段位展示：徽章+进度条+当前积分\n● 排行榜：全服/好友双Tab，支持筛选职业\n● 赛季倒计时+历史段位回顾', data:'● MMR范围：0-5000，初始1200\n● 匹配阈值：±150（30s后放宽到±300）\n● 段位分级：青铜/白银/黄金/铂金/钻石/传说\n● 赛季时长：2个月，重置为原段位×50%+100\n● K值（ELO）：基础32，传说20', tech:'● 匹配使用消息队列+定时轮询\n● 排行榜使用Redis Sorted Set\n● 段位结算异步处理，避免阻塞对战流程\n● 赛季切换使用开关机制+数据快照', acceptance:'□ 匹配时间：高峰期<15s，低峰期<45s\n□ 胜率在50%±3%范围内（ELO收敛正常）\n□ 段位升降逻辑准确，无积分越界\n□ 赛季重置后数据正确归档' } },
+      { title:'商城与抽卡系统', type:'feature', priority:'medium', assignee:'zs', desc:'卡包设计、保底机制、限时活动、礼包配置', doc:{ overview:'游戏商业化的核心入口。目标：搭建灵活的商品/卡包配置体系，提供公平透明的抽卡体验（含保底机制），通过限时活动和礼包刺激消费转化。', flow:'1. 进入商城 → 2. 浏览商品（卡包/礼包/道具/外观）→ 3. 选择购买/抽卡 → 4. 支付确认（扣相应货币）→ 5. 抽卡动画 → 6. 展示结果 → 7. 卡牌入库 / 重复卡自动处理', ui:'● 商城首页：轮播Banner + 热门推荐 + 分类Tab\n● 卡包展示：卡包外观预览 + 概率公示入口\n● 抽卡动画：卡包打开→卡背翻转→稀有度特效→卡面展示\n● 保底进度条：当前抽数/保底抽数，可视化展示', data:'● 抽卡概率：N-60%, R-25%, SR-10%, SSR-4%, UR-1%\n● 保底机制：每50抽至少1张SR+；每100抽至少1张SSR\n● 10连抽保底SR（覆盖单抽累计）\n● 限时卡池：UP卡概率提升至50%（同稀有度内）', tech:'● 抽卡结果服务端生成，客户端只做展示\n● 概率配置使用权重池+洗牌算法\n● 保底计数器需服务端记录+客户端同步\n● 支付对接：App Store/Google Play/第三方支付', acceptance:'□ 抽卡概率偏差<0.5%（10万次压力测试）\n□ 保底机制100%触发，无遗漏\n□ 支付流程完整闭环，退款自动回收道具\n□ 抽卡动画流程流畅无卡顿' } },
+      { title:'货币与经济体系', type:'feature', priority:'high', assignee:'ls', desc:'多货币设计、产出/消耗数值模型、通货膨胀控制', doc:{ overview:'游戏经济的命脉。目标：设计多货币分层体系，精确控制产出与消耗的数值平衡，确保游戏经济的长期健康运转，避免通货膨胀或通货紧缩。', flow:'1. 定义货币层级（软币/硬通货/活动代币）→ 2. 配置各行为产出 → 3. 配置各系统消耗 → 4. 数值模型模拟（Excel/脚本）→ 5. 内测调优 → 6. 上线监控 → 7. 定期复盘调整', ui:'● 主界面顶部：多货币栏（金币/钻石/代币图标+数量）\n● 获得动效：货币飞入目标位置的动画\n● 不足提示：红字闪烁+快捷充值入口', data:'● 软币（金币）：对战/任务产出，主要用于升级、普通物品\n● 硬通货（钻石）：充值获取，用于抽卡、高级物品\n● 活动代币：限时活动产出，用于兑换限定物品\n● 日均产出控制：约1000金币、50钻石（免费渠道）\n● 关键消耗比：升级消耗占总产出60%，抽卡占25%', tech:'● 服务端权威管理所有货币余额\n● 货币变动使用事务机制（扣减+发放原子操作）\n● 数值模型使用Python脚本+Jupyter模拟\n● 异常监控：单日单用户货币变动>阈值自动告警', acceptance:'□ 经济模型模拟1000天无崩溃（通货膨胀率<5%/月）\n□ 货币变动日志完整可追溯\n□ 刷币漏洞扫描机制覆盖常见攻击路径\n□ 免费/付费玩家体验曲线无断层' } },
+      { title:'战斗回放与分享', type:'feature', priority:'low', assignee:'ww', desc:'战斗录像、精彩片段截取、社交分享', doc:{ overview:'提升用户活跃度和社交传播的辅助系统。目标：支持完整的战斗录像回放，提供精彩片段截取和一键分享功能，降低用户二次传播门槛。', flow:'1. 战斗结束 → 2. 提示可保存回放 → 3. 进入回放列表 → 4. 选择录像播放（倍速/暂停/跳转）→ 5. 标记精彩时刻 → 6. 生成分享卡片（含精彩片段GIF/截图）→ 7. 分享到社交平台', ui:'● 回放播放器：进度条+暂停/播放/1x2x4x倍速\n● 精彩时刻：视频片段缩略图列表，可点击跳转\n● 分享卡片：胜负信息+关键数据+KDA+二维码\n● 好友间可直接发送回放文件', data:'● 录像文件格式：JSON指令序列（一局约50-200KB）\n● 精彩片段：前后各15秒截取\n● 回放保存上限：最近50局\n● 分享卡片分辨率：1080×1920（竖版适配社媒）', tech:'● 录像：服务端录制指令流，客户端回放执行\n● 精彩片段：在客户端使用Canvas录制+合成\n● 分享：预生成卡片图片+动态链接\n● 回放文件压缩：使用MessagePack替代JSON', acceptance:'□ 回放与原始对战结果100%一致（随机种子同步）\n□ 录像文件<500KB（30回合标准对局）\n□ 精彩片段生成<3秒\n□ 分享卡片各平台显示正常' } },
+      { title:'任务与成就系统', type:'feature', priority:'medium', assignee:'zl', desc:'日常/周常/赛季任务、成就徽章、进度追踪', doc:{ overview:'提升用户日常活跃度和长期留存的关键系统。目标：通过多层级任务（日常/周常/赛季/成就）驱动玩家行为，配合奖励体系形成正反馈循环。', flow:'1. 任务刷新（每日0点/每周一0点）→ 2. 玩家查看任务列表 → 3. 游戏中自动追踪进度 → 4. 完成任务 → 5. 弹窗提示+奖励发放 → 6. 领取奖励 → 7. 成就解锁：全局广播+头像框/称号发放', ui:'● 任务面板：日常/周常/成就三个Tab\n● 进度条+具体数值（如"3/5场胜利"）\n● 完成动效：进度条填满→金色闪光→奖励图标飞入\n● 成就墙：徽章展示+稀有度边框+解锁时间', data:'● 日常任务：5个/天，刷新机制（可付费刷新1次）\n● 周常任务：10个/周，经验值累计奖励\n● 成就分级：普通→稀有→史诗→传说\n● 活跃度：日常/周常完成后获得活跃度，满值领宝箱', tech:'● 任务进度使用事件订阅模式\n● 刷新时间服务器时间（防时区作弊）\n● 任务池配置化：行为类型+条件+数量+奖励\n● 成就检测采用增量计数+定时全量校验', acceptance:'□ 所有任务进度实时追踪，延迟<1s\n□ 跨天/跨周刷新准确无误\n□ 奖励发放100%准确，无重复/遗漏\n□ 成就解锁条件与显示一致' } },
+      { title:'社交与好友系统', type:'feature', priority:'medium', assignee:'zs', desc:'好友列表、私聊/群聊、观战、赠礼', doc:{ overview:'构建游戏内的社交网络，提升用户粘性和病毒传播。目标：提供丰富的好友互动方式，通过观战、赠礼、组队等功能促进用户间的社交连接。', flow:'1. 搜索/推荐好友 → 2. 发送好友申请 → 3. 对方确认 → 4. 好友列表关联 → 5. 互动方式：私聊/赠送体力/请求卡牌/观战/邀请组队 → 6. 社交广场/公会系统（扩展）', ui:'● 好友列表：在线状态标识（绿/灰/黄=对战中）\n● 聊天窗口：气泡样式+表情包+常用语快捷回复\n● 观战入口：好友列表→观战按钮→进入对战观看\n● 赠礼界面：每日赠送列表+一键全部赠送', data:'● 好友上限：基础50人，VIP可扩展至200人\n● 每日赠送体力上限：5次\n● 观战延迟：5-10秒（防作弊）\n● 聊天记录保留：30天', tech:'● 使用WebSocket维护在线状态\n● 聊天使用消息队列+离线推送\n● 观战：复用对战录像流（延迟推送）\n● 好友关系使用双向数据库记录', acceptance:'□ 好友在线状态实时同步（延迟<3s）\n□ 聊天消息送达率>99.9%\n□ 观战画面流畅，无断连\n□ 好友数据双向一致' } },
+      { title:'新手引导流程', type:'feature', priority:'medium', assignee:'ls', desc:'分步引导、战斗教程、奖励引导、跳过机制', doc:{ overview:'用户首次体验的第一印象决定留存率。目标：设计分层渐进的新手引导，通过教学关卡+任务引导+奖励刺激，让玩家在15分钟内掌握核心玩法并有明确的下一步目标。', flow:'1. 首次启动→剧情引入（可跳过）→2. 基础操作教学（抽牌→出牌→攻击）→3. 首场教学对战（引导AI放水）→4. 胜利→奖励+NPC新手卡组→5. 引导卡组编辑→6. 引导商城→抽取首张SR保底卡→7. 引导匹配→首场PvP→8. 开启日常任务引导', ui:'● 遮罩+箭头+高亮区域\n● 对话框：NPC立绘+文字+下一步按钮\n● 强制引导步骤不可跳过；非强制步骤显示"跳过"按钮\n● 引导进度：右上角步骤指示器（如"3/12"）', data:'● 引导总时长控制：8-15分钟\n● 强制引导步骤：核心战斗操作（约10步）\n● 奖励分布：完成3步领首充礼包，完成全部领传说卡\n● 引导期内胜率保证：AI放水使玩家胜率>80%', tech:'● 引导流程使用状态机配置（JSON驱动）\n● 每步记录完成状态（支持断点续导）\n● A/B测试：双版本引导对比转化率\n● 引导配置后台热更新，无需发版', acceptance:'□ 引导流程无卡死/跳出/步骤遗漏\n□ 断线重连后引导自动恢复到正确步骤\n□ 跳过功能不影响后续引导步骤\n□ 新手引导完成率>85%（次日数据分析）' } },
+      { title:'数值平衡与参数表', type:'optimize', priority:'high', assignee:'ww', desc:'卡牌数值模型、胜率监控、平衡性调整工具', doc:{ overview:'持续保障游戏竞技公平性的后台系统。目标：建立完整的数值参数管理体系，通过数据监控驱动平衡调整，确保竞技环境健康发展。', flow:'1. 数据采集（海量对局数据）→ 2. 自动化分析（各卡牌胜率/使用率/Ban率）→ 3. 异常检测（某卡胜率>55%触发告警）→ 4. 平衡方案制定（buff/nerf参数调整）→ 5. 内测环境验证 → 6. 更新公告 → 7. 上线生效 → 8. 持续监控调整效果', ui:'● 后台Dashboard：全卡牌胜率/使用率热力图\n● 卡牌详情：详细数据+趋势曲线+对局分布\n● 参数编辑：表格界面+历史版本对比\n● 告警配置：阈值设定+通知方式（邮件/企微）', data:'● 理想胜率范围：48%-52%（单卡）\n● 监控指标：使用率>30%或胜率>55%触发审查\n● 调整幅度控制：单次buff不超过10%，nerf不超过15%\n● 参数表版本管理：每次调整记录快照', tech:'● 数据管道：对战日志→Kafka→Flink实时计算→ClickHouse\n● 可视化：Grafana+自建Dashboard\n● 参数配置：配置平台下发→客户端/服务端热加载\n● A/B实验平台：灰度发布新参数', acceptance:'□ 数据延迟<5分钟（对战结束到Dashboard可见）\n□ 所有卡牌使用率在5%-25%范围内（调整后1个月内）\n□ 参数修改无需停服，<30分钟全网生效\n□ 告警规则准确，无误报率<5%' } },
+      { title:'UI动效与视觉特效', type:'optimize', priority:'medium', assignee:'zl', desc:'战斗特效、抽卡动画、UI过渡动效、多端适配', doc:{ overview:'高品质的视觉表现是卡牌游戏的核心竞争力之一。目标：打造流畅、有冲击力的视觉体验，通过精致的动效和特效提升抽卡、对战等关键环节的爽感。', flow:'1. 视觉风格确立（美术设定集）→ 2. 抽卡动画设计（稀有度分级特效）→ 3. 战斗特效（卡牌出场/攻击/技能/死亡）→ 4. UI动效（页面切换/列表加载/状态变化）→ 5. 性能优化（粒子数量/Draw Call控制）→ 6. 多端适配（手机/平板分辨率）', ui:'● 抽卡动画：天降流星(UR)→彩虹光柱(SSR)→金光(SR)→蓝光(R)→白光(N)\n● 战斗特效：卡牌飞出+撞击火花+伤害数字飘浮\n● UI动效：弹性缓出、渐变过渡、骨骼动画\n● Loading动画：卡牌翻转+元素旋转', data:'● 抽卡动画时长：N 2s / R 2.5s / SR 3s / SSR 4s / UR 5s\n● 同屏粒子数上限：移动端200/PC端500\n● 动效帧率目标：稳定60fps（低端机30fps）\n● 特效资源包大小控制：<100MB（压缩后）', tech:'● 粒子特效：Unity粒子系统+Shader Graph\n● 抽卡动画：Timeline+动效事件\n● UI动效：DoTween/Animator\n● 性能优化：LOD动效（低端机降级方案）', acceptance:'□ 动效流畅度：主流机型60fps稳定\n□ 抽卡动画各稀有度正确触发\n□ 低端机降级方案生效（动态降低粒子数）\n□ 各分辨率下UI布局无错位' } },
+    ]
+  },
+  ecommerce: {
+    cards: [
+      { title:'商品管理与发布系统', type:'feature', priority:'high', assignee:'zs', desc:'商品CRUD、SKU管理、批量操作、商品审核' },
+      { title:'购物车与下单流程', type:'feature', priority:'high', assignee:'ls', desc:'购物车增删改、优惠券计算、订单生成、库存扣减' },
+      { title:'支付与退款系统', type:'feature', priority:'high', assignee:'ww', desc:'多支付渠道对接、支付回调、退款流程、对账' },
+      { title:'订单管理与物流追踪', type:'feature', priority:'high', assignee:'zl', desc:'订单状态流转、发货/签收、物流查询、退换货' },
+      { title:'用户中心与会员体系', type:'feature', priority:'medium', assignee:'zs', desc:'注册登录、个人信息、会员等级、积分体系' },
+      { title:'搜索与商品推荐', type:'feature', priority:'medium', assignee:'ls', desc:'全文搜索、筛选排序、个性化推荐、搜索优化' },
+      { title:'商家后台与数据分析', type:'feature', priority:'medium', assignee:'ww', desc:'店铺管理、数据报表、流量分析、经营诊断' },
+      { title:'营销活动与优惠券', type:'feature', priority:'medium', assignee:'zl', desc:'满减/秒杀/拼团、优惠券发放与核销、活动配置' },
+      { title:'后台管理系统', type:'feature', priority:'high', assignee:'zs', desc:'权限管理、审核流、配置中心、操作日志' },
+      { title:'评价与售后系统', type:'feature', priority:'medium', assignee:'ls', desc:'商品评价、晒单、售后工单、纠纷处理' },
+    ]
+  }
+};
+
+function aiBreakdown() {
+  const input = document.getElementById('aiInput').value.trim();
+  if (!input) { showToast('请先描述你的需求'); return; }
+
+  let template = null;
+  const kw = input.toLowerCase();
+  if (/卡牌|卡游|对战|tcg|ccg|炉石|游戏王/i.test(kw)) template = 'cardGame';
+  else if (/电商|商城|购物|店铺|淘宝|京东/i.test(kw)) template = 'ecommerce';
+
+  if (template && aiTemplates[template]) {
+    requirements = aiTemplates[template].cards.map(c => ({
+      id: String(nextId++), title: c.title, type: c.type,
+      priority: c.priority, assignee: c.assignee, currentStage: 'backlog',
+      desc: c.desc||'', designDoc: c.doc || null
+    }));
+    customLinks = [];
+    nextLinkId = 200;
+    exitLinkMode();
+    saveAll();
+    renderAll();
+    document.getElementById('aiInput').value = '';
+    showToast('已生成 ' + requirements.length + ' 张需求卡片，拖到「设计中」后可展开策划文档');
+  } else {
+    showToast('暂未匹配到模板，请尝试「卡牌游戏」「电商后台」等关键词，或手动添加卡片');
+  }
+}
+
+// Design Doc
+let currentDocCardId = null;
+
+function autoGenDoc(req) {
+  const title = req.title||'';
+  const desc = req.desc||'';
+  const t = title+desc;
+  const isGame = /卡牌|对战|游戏|战斗|技能|回合|抽卡|排位|段位|卡组/i.test(t);
+  const ctx = isGame ? '卡牌对战游戏' : '系统平台';
+
+  // Helper: check if title+desc matches any keyword pattern
+  const matches = (...patterns) => patterns.some(p => new RegExp(p, 'i').test(t));
+
+  // ===== overview =====
+  let overview = '## 功能定位\n';
+  overview += title + '是' + ctx + '中';
+  if (matches('核心', '关键', '主要')) {
+    overview += '的P0级核心功能模块。该模块直接影响游戏的核心体验闭环，是玩家日常交互频率最高的系统之一。';
+  } else {
+    overview += '的重要功能模块。该模块作为支撑性系统，为' + ctx + '提供关键的辅助能力和体验扩展。';
+  }
+  overview += '\n\n## 用户价值\n- 目标用户：';
+  if (matches('匹配', '排位', '对战', '商城')) {
+    overview += '全部活跃玩家\n- 使用频率：每日多次（DAU渗透率目标 > 80%）';
+  } else {
+    overview += '核心玩家及进阶用户\n- 使用频率：每周3-5次（渗透率目标 > 40%）';
+  }
+  overview += '\n- 核心痛点：' + desc.replace(/[，；。]/g, '\n  - ');
+  overview += '\n- 预期效果：提升用户';
+  if (matches('匹配', '对战')) {
+    overview += '竞技体验和公平性，目标30日留存+5%';
+  } else {
+    overview += '留存率和使用满意度，目标NPS +10';
+  }
+  overview += '\n\n## 竞品参考\n- ';
+  if (isGame) {
+    overview += '《炉石传说》《游戏王Master Duel》《影之诗》';
+  } else {
+    overview += '主流SaaS/电商平台';
+  }
+  overview += '\n- 可借鉴点：';
+  if (matches('匹配', '排位')) {
+    overview += '段位可视化、赛季机制';
+  } else {
+    overview += '流畅的交互体验、完善的数据看板';
+  }
+
+  // ===== disassembly (详细功能拆卸 - 24 子模块) =====
+  let disassembly = '## 一级模块拆分\n';
+  disassembly += '\n### 模块A：核心引擎层\n';
+  disassembly += '| 子模块 | 功能说明 | 优先级 | 依赖 |\n';
+  disassembly += '|--------|---------|--------|------|\n';
+  if (matches('对战', '战斗', '回合', '技能', '伤害')) {
+    disassembly += '| 战斗状态机 | 管理回合生命周期（开始→抽牌→出牌→结算→结束），驱动所有战斗行为 | P0 | 无 |\n';
+    disassembly += '| 技能触发引擎 | 解析技能条件→匹配触发时机→执行效果链（支持嵌套/连锁/异步） | P0 | 战斗状态机 |\n';
+    disassembly += '| 伤害计算器 | 接收攻击指令→查询攻防属性→计算最终伤害→产生数值事件 | P0 | 战斗状态机 |\n';
+    disassembly += '| 回合计时器 | 管理每回合时间限制，超时自动结束回合，支持烧绳动画 | P1 | 战斗状态机 |\n';
+    disassembly += '| 战斗日志记录 | 完整记录每一帧操作与状态变更，支持对局回放与复盘分析 | P1 | 战斗状态机 |\n';
+    disassembly += '| AI决策引擎 | NPC/PVE对战中AI的卡牌选择、出牌策略与难度分级 | P2 | 技能触发引擎 |\n';
+  } else if (matches('匹配', '排位')) {
+    disassembly += '| 匹配引擎 | 基于MMR计算玩家实力→构建匹配池→筛选最优对手→建立对战 | P0 | 玩家数据服务 |\n';
+    disassembly += '| 段位评估器 | 根据对战结果计算积分变化→判定升降级→更新排行榜 | P0 | 匹配引擎 |\n';
+    disassembly += '| 匹配池管理器 | 维护在线玩家队列，按段位/延迟/等待时间动态调度 | P0 | 匹配引擎 |\n';
+    disassembly += '| 赛季管理器 | 赛季周期控制、段位重置、赛季奖励结算发放 | P1 | 段位评估器 |\n';
+    disassembly += '| 防作弊检测 | 异常行为识别（挂机/刷分/脚本）、匹配成功率监控 | P1 | 匹配引擎 |\n';
+    disassembly += '| 跨区路由 | 跨服/跨区匹配的流量分配与延迟优化调度 | P2 | 匹配池管理器 |\n';
+  } else {
+    disassembly += '| 主流程控制器 | 驱动功能主流程的状态流转、生命周期管理与异常处理 | P0 | 无 |\n';
+    disassembly += '| 权限校验器 | 操作前校验用户身份/等级/资源/频率是否满足条件 | P0 | 用户服务 |\n';
+    disassembly += '| 数据读写层 | 封装数据的增删改查，统一处理缓存一致性、批量操作事务 | P0 | 数据库服务 |\n';
+    disassembly += '| 事件分发器 | 注册/监听/分发业务事件，解耦模块间通信 | P1 | 数据读写层 |\n';
+    disassembly += '| 版本管理器 | 资源热更新、A/B实验分流、灰度发布策略控制 | P1 | 配置中心 |\n';
+    disassembly += '| 操作审计器 | 记录关键操作的完整审计日志（操作人/时间/IP/变更内容） | P2 | 事件分发器 |\n';
+  }
+
+  disassembly += '\n### 模块B：数据与配置层\n';
+  disassembly += '| 子模块 | 功能说明 | 优先级 | 依赖 |\n';
+  disassembly += '|--------|---------|--------|------|\n';
+  if (matches('卡牌', '技能', '属性', '数值')) {
+    disassembly += '| 卡牌参数表 | 存储所有卡牌的攻击/生命/费用/技能ID等静态数据及多语言文本 | P0 | 配置中心 |\n';
+    disassembly += '| 数值公式引擎 | 定义伤害/治疗/成长等核心计算公式，支持热更新参数调整 | P0 | 卡牌参数表 |\n';
+    disassembly += '| 稀有度规则引擎 | 定义R/SR/SSR等稀有度对应的数值区间、生成概率与保底策略 | P1 | 数值公式引擎 |\n';
+    disassembly += '| 技能效果库 | 预定义技能模板（直伤/治疗/buff/debuff/召唤/光环）及参数规范 | P1 | 卡牌参数表 |\n';
+    disassembly += '| 数值平衡工具 | 内部数值模拟与自动化测试工具，验证公式合理性与极端边界 | P2 | 数值公式引擎 |\n';
+    disassembly += '| 版本快照系统 | 每次数值调整记录完整快照，支持一键回滚到历史版本 | P2 | 卡牌参数表 |\n';
+  } else if (matches('货币', '经济', '商城', '抽卡')) {
+    disassembly += '| 经济模型参数 | 定义产出/消耗/概率/保底等经济运行参数及调控策略 | P0 | 数值公式引擎 |\n';
+    disassembly += '| 概率控制器 | 卡池概率配置、抽卡保底逻辑、随机种子管理与公平性审计 | P0 | 配置中心 |\n';
+    disassembly += '| 货币交易引擎 | 多种货币的兑换计算、消耗校验、退还处理、审计流水 | P1 | 经济模型参数 |\n';
+    disassembly += '| 限时促销系统 | 限时礼包/折扣/首充活动的价格策略与时间窗口管理 | P1 | 货币交易引擎 |\n';
+    disassembly += '| 反通胀检测 | 监控货币总量/产出速率/消耗速率，预警经济泡沫与通胀风险 | P2 | 经济模型参数 |\n';
+    disassembly += '| 用户分群定价 | 基于用户画像与付费能力的差异化定价与个性化礼包推荐 | P2 | 限时促销系统 |\n';
+  } else {
+    disassembly += '| 业务配置表 | 存储功能相关的静态配置（开关/阈值/模板/文案）及版本管理 | P0 | 配置中心 |\n';
+    disassembly += '| 数据校验器 | 输入合法性校验 + 业务规则校验 + 防作弊规则检测 | P1 | 业务配置表 |\n';
+    disassembly += '| 缓存策略管理器 | 多级缓存（L1本地/L2 Redis）的读写策略、失效机制与一致性保证 | P1 | 数据读写层 |\n';
+    disassembly += '| 数据迁移工具 | 版本升级时的数据转换脚本、迁移编排与兼容性自动处理 | P2 | 业务配置表 |\n';
+    disassembly += '| 元数据注册中心 | 所有数据模型/字段定义/表关系的元信息集中管理与查询接口 | P2 | 数据读写层 |\n';
+    disassembly += '| 数据血缘追踪 | 关键数据的来源标识、变更链路记录与下游影响自动分析 | P2 | 元数据注册中心 |\n';
+  }
+
+  disassembly += '\n### 模块C：交互与表现层\n';
+  disassembly += '| 子模块 | 功能说明 | 优先级 | 依赖 |\n';
+  disassembly += '|--------|---------|--------|------|\n';
+  if (matches('战斗', '对战', '回合')) {
+    disassembly += '| 战场渲染器 | 绘制手牌区/战场区/墓地/牌库的2D/3D视觉表现与布局 | P0 | 战斗状态机 |\n';
+    disassembly += '| 卡牌动效系统 | 管理出牌动画/攻击飞行/技能特效/粒子表现与缓动编排 | P1 | 战场渲染器 |\n';
+    disassembly += '| UI动画控制器 | 回合切换/卡牌抽取/胜负揭晓等关键节点的动画编排与节奏控制 | P1 | 战场渲染器 |\n';
+    disassembly += '| 音效管理器 | 出牌音效/技能音效/背景音乐/BGM无缝切换与混音控制 | P1 | UI动画控制器 |\n';
+    disassembly += '| 战斗摄像机 | 战场视角控制、关键事件特写镜头、对局回放多视角切换 | P2 | 战场渲染器 |\n';
+    disassembly += '| 无障碍适配 | 色弱模式/文字放大/语音播报战斗过程/操作辅助提示 | P2 | 战场渲染器 |\n';
+  } else {
+    disassembly += '| 主界面布局 | 功能页面的页面骨架、导航结构、信息层级与响应式断点 | P0 | UI框架 |\n';
+    disassembly += '| 交互反馈组件 | 按钮/弹窗/Toast/加载态/骨架屏等通用交互组件的统一规范 | P1 | 主界面布局 |\n';
+    disassembly += '| 列表与表格组件 | 排序/筛选/分页/行操作/infinite scroll/虚拟滚动等数据展示 | P1 | 主界面布局 |\n';
+    disassembly += '| 表单验证器 | 字段校验规则引擎、实时校验、错误提示与提交拦截 | P1 | 交互反馈组件 |\n';
+    disassembly += '| 主题与皮肤系统 | 色彩方案/字体/间距/圆角的Token化管理与日夜间主题切换 | P2 | 主界面布局 |\n';
+    disassembly += '| 国际化适配框架 | 多语言文本/图片/日期货币格式化的一站式切换方案 | P2 | 主题与皮肤系统 |\n';
+  }
+
+  disassembly += '\n### 模块D：服务与集成层\n';
+  disassembly += '| 子模块 | 功能说明 | 优先级 | 依赖 |\n';
+  disassembly += '|--------|---------|--------|------|\n';
+  if (matches('对战', '战斗')) {
+    disassembly += '| 对战服务器 | 处理匹配/建立房间/转发指令/仲裁结果，服务端权威保证公平性 | P0 | 匹配引擎 |\n';
+    disassembly += '| 断线重连服务 | 保存对战快照→检测心跳断开→恢复状态→增量同步进度 | P1 | 对战服务器 |\n';
+    disassembly += '| 实时消息推送 | 好友状态/对战邀请/赠礼通知等社交通知的实时推送与离线存储 | P1 | WebSocket网关 |\n';
+    disassembly += '| 反外挂引擎 | 客户端完整性校验/行为模式分析/异常数据标记与自动封禁 | P1 | 对战服务器 |\n';
+    disassembly += '| 对局录像服务 | 对战全程序列化存储/按key检索/流式回放与分享 | P2 | 断线重连服务 |\n';
+    disassembly += '| 全球跨服路由 | 全球部署延迟优化/就近接入调度/跨区对战分配策略 | P2 | 对战服务器 |\n';
+  } else {
+    disassembly += '| API网关 | 统一接口鉴权/限流/路由/协议转换/文档自动生成的流量入口 | P0 | 用户服务 |\n';
+    disassembly += '| 异步任务队列 | 处理耗时操作（导出/推送/结算/批处理）的解耦、削峰与失败重试 | P1 | API网关 |\n';
+    disassembly += '| 数据上报服务 | 埋点采集→数据清洗→实时聚合→离线分析→Dashboard展示 | P1 | 数据管道 |\n';
+    disassembly += '| 文件存储服务 | 图片/文档/日志的本地上传/云端转码/CDN分发与防盗链 | P1 | API网关 |\n';
+    disassembly += '| 定时任务调度 | Cron定时任务的注册/执行/失败重试/监控告警与依赖编排 | P2 | 异步任务队列 |\n';
+    disassembly += '| 服务健康检查 | 主动探测/心跳上报/自动摘除故障节点与灰度回滚 | P2 | API网关 |\n';
+  }
+
+  disassembly += '\n## 依赖关系图\n';
+  disassembly += '```\n';
+  disassembly += '┌──────────────┐    ┌──────────────┐    ┌──────────────┐\n';
+  disassembly += '│ 交互表现层(C)│───▶│ 核心引擎层(A)│───▶│ 数据配置层(B)│\n';
+  disassembly += '│ 6个子模块     │    │ 6个子模块     │    │ 6个子模块     │\n';
+  disassembly += '└──────────────┘    └──────────────┘    └──────────────┘\n';
+  disassembly += '         │                   │                   │\n';
+  disassembly += '         └───────────────────┼───────────────────┘\n';
+  disassembly += '                             ▼\n';
+  disassembly += '                     ┌──────────────┐    ┌──────────────┐\n';
+  disassembly += '                     │ 服务集成层(D)│───▶│  外部依赖    │\n';
+  disassembly += '                     │ 6个子模块     │    │ 用户/支付/推送│\n';
+  disassembly += '                     └──────────────┘    └──────────────┘\n';
+  disassembly += '```\n';
+
+  disassembly += '\n## 工时预估（共24个子模块）\n';
+  disassembly += '| 模块 | 前端(人日) | 后端(人日) | 测试(人日) | 总计(人日) |\n';
+  disassembly += '|------|-----------|-----------|-----------|----------|\n';
+  disassembly += '| 核心引擎层(A-6项) | ' + (matches('对战', '战斗') ? '4' : '2') + ' | ' + (matches('对战', '战斗') ? '6' : '3') + ' | 3 | ' + (matches('对战', '战斗') ? '13' : '8') + ' |\n';
+  disassembly += '| 数据配置层(B-6项) | 2 | 3 | 2 | 7 |\n';
+  disassembly += '| 交互表现层(C-6项) | ' + (matches('对战', '战斗') ? '6' : '4') + ' | 0 | 3 | ' + (matches('对战', '战斗') ? '9' : '7') + ' |\n';
+  disassembly += '| 服务集成层(D-6项) | 0 | ' + (matches('对战', '战斗') ? '5' : '4') + ' | 2 | ' + (matches('对战', '战斗') ? '7' : '6') + ' |\n';
+  disassembly += '| **合计** | **' + (matches('对战', '战斗') ? '12' : '8') + '** | **' + (matches('对战', '战斗') ? '14' : '10') + '** | **10** | **' + (matches('对战', '战斗') ? '36' : '28') + '** |\n';
+
+  disassembly += '\n## 技术风险\n';
+  disassembly += '| 风险项 | 风险等级 | 缓解措施 |\n';
+  disassembly += '|--------|---------|----------|\n';
+  if (matches('对战', '战斗', '匹配')) {
+    disassembly += '| 高并发对战状态同步延迟 | 高 | 服务端权威仲裁+状态快照增量同步+断线重连补偿 |\n';
+    disassembly += '| 技能逻辑组合爆炸（嵌套/连锁） | 高 | 技能模板规范化+效果组合白名单+自动化测试覆盖 |\n';
+    disassembly += '| 匹配算法公平性与等待时间平衡 | 中 | MMR主算法+人工复核+玩家反馈闭环调优 |\n';
+  } else {
+    disassembly += '| 数据一致性（高并发读写冲突） | 中 | 乐观锁+事务+幂等设计+分布式锁兜底 |\n';
+    disassembly += '| 接口性能瓶颈（P99超限） | 中 | 缓存策略+异步处理+压测验证+限流熔断 |\n';
+    disassembly += '| 第三方SDK兼容性 | 中 | 版本锁定+兼容性测试+降级方案备用 |\n';
+  }
+  disassembly += '| 依赖服务不稳定导致雪崩 | 中 | 熔断降级+本地缓存兜底+链路追踪告警 |\n';
+  disassembly += '| 需求变更导致架构返工 | 中 | 模块解耦设计+敏捷迭代+原型确认+变更评审 |\n';
+  disassembly += '| 数据迁移多版本兼容 | 中 | 版本号标记+向前兼容+自动化迁移脚本+回滚方案 |\n';
+  disassembly += '| 跨团队协作进度风险 | 低 | 接口先行+Mock服务+周同步会+阻断升级机制 |\n';
+
+  // ===== flow =====
+  let flow = '## 主流程\n';
+  flow += '1. 用户进入功能入口 → 权限校验 → 加载初始数据\n';
+  flow += '2. 系统展示当前状态（加载动画 + 骨架屏过渡）\n';
+  flow += '3. 用户执行操作（具体交互详见UI设计稿）\n';
+  flow += '4. 输入校验（前端+后端双重校验）→ 业务逻辑处理\n';
+  flow += '5. 结果返回 + 状态更新 + 动效反馈（200-300ms过渡）\n';
+  flow += '\n## 状态机设计\n```\nIDLE → LOADING → READY → PROCESSING → SUCCESS/FAILURE\n  ↑        ↓         ↓          ↓            ↓\n  └── 错误恢复/重试 ←── ERROR ←──────────────┘\n```\n';
+  flow += '\n## 异常分支\n| 异常类型 | 触发条件 | 处理策略 | 用户提示 |\n';
+  flow += '|---------|---------|---------|----------|\n';
+  flow += '| 网络超时 | 请求>5s无响应 | 自动重试1次 → 失败降级 | "网络不稳定，请稍后重试" |\n';
+  flow += '| 服务异常 | 5xx/数据库错误 | 熔断降级 + 错误上报 | "服务繁忙，请稍后再试" |\n';
+  flow += '| 数据异常 | 返回数据格式不符 | 本地缓存兜底 + 告警 | 静默降级（使用缓存数据） |\n';
+  flow += '| 权限不足 | 未登录/等级不够 | 引导至登录/开通页面 | "需要XX等级解锁该功能" |\n';
+  flow += '| 并发冲突 | 多人同时操作 | 乐观锁 + 版本号 | "数据已被更新，请刷新后重试" |\n';
+
+  // ===== ui =====
+  let ui = '## 布局结构\n- 主区域：';
+  if (matches('列表', '管理', '后台')) {
+    ui += '表格式数据展示区（支持排序/筛选/分页）\n- 顶部工具栏：搜索框 + 批量操作按钮 + 视图切换\n- 右侧面板：详情/编辑抽屉（宽度360px，滑入动画）\n- 底部：分页组件 + 状态栏（共X条/Y页）';
+  } else {
+    ui += '信息展示+操作区（响应式布局，移动端自适应）\n- 顶部导航：面包屑 + 标题 + 核心操作按钮（主CTA）\n- 底部：快捷操作栏/状态指示\n- 侧边：' + (matches('筛选', '搜索') ? '筛选条件面板（可折叠，默认展开）' : '辅助信息面板（可收起）');
+  }
+  ui += '\n\n## 交互规范\n| 交互元素 | 行为规范 |\n|---------|---------|\n';
+  ui += '| 可点击元素 | Hover: 轻微变色+阴影提升（transform: translateY(-1px)）；Active: 按下态颜色加深 |\n';
+  ui += '| 表单输入 | Focus: 边框色变更 + 外发光；Error: 红色边框 + 错误文案 |\n';
+  ui += '| 列表加载 | 骨架屏（灰色脉冲动画）→ 数据展示（淡入效果） |\n';
+  ui += '| 动效 | 过渡时长200-300ms，缓动函数ease-out；列表item交错入场（stagger 50ms） |\n';
+  ui += '| 空状态 | 插画 + 引导文案 + CTA按钮（如"创建第一个XX"） |\n';
+  ui += '| 确认操作 | 二次确认弹窗（标题+说明+取消/确认双按钮） |\n';
+  ui += '\n## 视觉关键词\n- 色彩：';
+  if (matches('对战', '战斗', '技能')) {
+    ui += '深色主题为主（#1a1a2e），金色(#ffd700)高亮关键元素';
+  } else {
+    ui += '明亮清晰的专业色调，主色#4F46E5，辅色#10B981';
+  }
+  ui += '\n- 氛围：' + (matches('对战', '战斗') ? '热血、紧张、竞技感' : '专业、高效、可信赖');
+  ui += '\n- 字体：标题粗体SemiBold(600)，正文Regular(400)，数字Tabular Nums对齐';
+
+  // ===== data =====
+  let data = '## 核心数据模型\n```json\n' + title.replace(/系统|模块/g, '') + 'Model {\n';
+  data += '  "id": "string — 全局唯一主键（UUID v4）",\n';
+  data += '  "userId": "string — 所属用户ID",\n';
+  data += '  "status": "enum — ' + (matches('匹配', '对战', '回合') ? 'WAITING|MATCHING|IN_GAME|FINISHED' : 'DRAFT|ACTIVE|ARCHIVED|DELETED') + '",\n';
+  data += '  "config": "json — 业务配置快照",\n';
+  data += '  "version": "int — 乐观锁版本号",\n';
+  data += '  "createdAt": "ISO8601 timestamp",\n';
+  data += '  "updatedAt": "ISO8601 timestamp"\n}\n```\n';
+  data += '\n## 配置参数表\n| 参数名 | 类型 | 默认值 | 说明 |\n|-------|------|-------|------|\n';
+  if (matches('对战', '战斗', '回合')) {
+    data += '| maxTurnDuration | int | 60 | 单回合最大时长（秒） |\n';
+    data += '| initialHandSize | int | 3 | 初始手牌数量 |\n';
+    data += '| maxManaCrystal | int | 10 | 最大法力水晶 |\n';
+    data += '| damageFloor | int | 1 | 伤害最低值 |\n';
+  } else {
+    data += '| pageSize | int | 20 | 分页大小 |\n';
+    data += '| cacheTTL | int | 300 | 缓存有效期（秒） |\n';
+    data += '| maxRetry | int | 3 | 最大重试次数 |\n';
+    data += '| rateLimitPerMin | int | 60 | 每分钟请求上限 |\n';
+  }
+  data += '\n## 关键数据规则\n';
+  data += '- ' + (matches('限额', '上限', '最大') ? '操作上限需服务端校验，前端仅做预拦截提醒' : '所有数据变更记录完整审计日志（操作人/时间/IP/变更前后值）') + '\n';
+  data += '- 敏感操作（' + (matches('对战', '支付', '交易', '抽卡') ? '对战结算/抽卡结果' : '删除/批量修改/权限变更') + '）需事务保证原子性\n';
+  data += '- 缓存策略：' + (matches('实时') ? '短TTL(30s) + 主动失效通知' : '中TTL(5min) + 惰性更新') + '\n';
+  data += '- 数据归档：' + (matches('对战', '回放') ? '对局记录保留90天，过期自动迁移至冷存储' : '活跃数据保留180天，过期自动归档') + '\n';
+  data += '\n## 数值设计（如适用）\n| 设计维度 | 基准值 | 取值逻辑 | 平衡约束 |\n|---------|-------|---------|----------|\n';
+  if (matches('对战', '战斗', '伤害')) {
+    data += '| 基础攻击力 | 1-12 | 按费用递增，每费约1.5攻 | 高费单卡战斗力上限为低费的3倍 |\n';
+    data += '| 基础生命值 | 1-30 | 按费用+稀有度决定 | 嘲讽随从生命值高于同费平均20% |\n';
+  } else {
+    data += '| 核心指标A | 待填充 | 根据业务需求定义 | 波动控制在±15% |\n';
+    data += '| 核心指标B | 待填充 | 根据业务需求定义 | 波动控制在±10% |\n';
+  }
+
+  // ===== tech =====
+  let tech = '## 架构设计\n- 架构模式：' + (matches('实时', '推送', '消息', '通知', '对战') ? '事件驱动（Event-Driven）+ CQRS读写分离' : '分层架构（Controller→Service→Repository）+ 异步任务队列') + '\n';
+  tech += '- 通信协议：RESTful API（同步）+ WebSocket（实时推送）+ gRPC（服务间调用）\n';
+  tech += '- 编程语言：' + (matches('对战', '战斗') ? '服务端Go（高并发）+ 客户端Unity C#' : '服务端Java/Go + 前端TypeScript') + '\n';
+  tech += '- 部署方式：容器化（Docker+K8s）+ CI/CD流水线\n';
+  tech += '\n## 技术栈详情\n| 层级 | 技术选型 | 选型理由 |\n|-----|---------|----------|\n';
+  tech += '| 网关 | Kong/APISIX | 统一鉴权、限流、路由 |\n';
+  tech += '| 业务服务 | ' + (matches('对战') ? 'Go (Gin/Fiber)' : 'Java (Spring Boot)') + ' | ' + (matches('对战') ? '高并发低延迟，Goroutine天然适配' : '生态成熟，团队熟悉') + ' |\n';
+  tech += '| 数据存储 | MySQL(主) + Redis(缓存) + ' + (matches('对战', '回放') ? 'MongoDB(录像/日志)' : 'ES(搜索)') + ' | 关系型+缓存+文档型分层存储 |\n';
+  tech += '| 消息队列 | Kafka/RabbitMQ | 异步解耦，削峰填谷 |\n';
+  tech += '| 监控 | Prometheus + Grafana + ELK + Sentry | 指标+日志+异常全覆盖 |\n';
+  tech += '\n## 关键依赖\n| 依赖服务 | 用途 | SLA要求 | 降级策略 |\n|---------|------|--------|----------|\n';
+  tech += '| 用户服务 | 鉴权/用户信息 | 99.9% | 缓存用户凭证30min |\n';
+  tech += '| 配置中心 | 开关/参数 | 99.99% | 本地配置文件兜底 |\n';
+  tech += '| 消息推送 | 通知/提醒 | 99.5% | 站内信降级 |\n';
+  tech += '| 数据上报SDK | 埋点采集 | 99.9% | 本地队列暂存 |\n';
+  tech += '\n## 性能指标\n| 指标 | 目标值 | 测量方法 |\n|-----|-------|----------|\n';
+  tech += '| 接口P99延迟 | < ' + (matches('搜索', '查询', '列表') ? '500ms' : '200ms') + ' | APM全链路追踪 |\n';
+  tech += '| 并发支持 | ' + (matches('对战', '匹配') ? '10万+同时在线' : '5000 QPS') + ' | 压力测试 |\n';
+  tech += '| 首屏加载 | < 2s (4G网络) | Lighthouse / 真机测试 |\n';
+  tech += '| 内存占用 | < ' + (matches('对战', '战斗') ? '200MB(移动端)' : '512MB(服务端)') + ' | Profiler持续监控 |';
+
+  // ===== acceptance =====
+  let acceptance = '## 功能验收（P0 — 必须通过）\n| 验收项 | 验收标准 | 测试方法 |\n|-------|---------|----------|\n';
+  acceptance += '| 核心流程完整性 | 主流程可完整走通，无阻断性Bug | 手动冒烟 + E2E自动化 |\n';
+  acceptance += '| 异常处理 | 所有异常场景（见流程设计）有合理降级，不白屏/不崩溃 | 异常注入测试 |\n';
+  acceptance += '| 数据一致性 | ' + (matches('对战', '支付', '交易') ? '战斗结果服务端与客户端状态一致' : 'CRUD操作数据与数据库一致') + '，无脏数据 | 自动化校验脚本 |\n';
+  acceptance += '| 接口响应 | P99 < ' + (matches('搜索', '查询', '列表') ? '500ms' : '200ms') + '（' + (matches('对战', '战斗') ? '对战过程中' : '正常负载下') + '） | APM监控/压测 |\n';
+  acceptance += '\n## 性能验收（P1）\n| 验收项 | 验收标准 | 测试方法 |\n|-------|---------|----------|\n';
+  acceptance += '| 首屏加载 | < 2s（4G网络/中端机型） | Lighthouse ≥ 80分 |\n';
+  acceptance += '| 内存泄漏 | 持续使用30分钟内存增长 < 10% | Profiler + 自动化脚本 |\n';
+  acceptance += '| ' + (matches('列表', '表格', '管理') ? '大列表滚动 | 1000条数据滚动帧率 > 50fps' : '操作响应 | 点击到视觉反馈 < 100ms') + ' | ' + (matches('列表') ? 'Performance面板' : '帧率监控') + ' |\n';
+  acceptance += '\n## 兼容性验收（P1）\n| 平台 | 版本要求 | 验收方式 |\n|-----|---------|----------|\n';
+  acceptance += '| Chrome | 最新2个版本 | 自动化截图对比 |\n';
+  acceptance += '| Safari | 最新2个版本 | 自动化截图对比 |\n';
+  acceptance += '| Edge | 最新版本 | 自动化截图对比 |\n';
+  acceptance += '| ' + (isGame ? 'iOS | 15+ | 真机测试（iPhone 12及以上） |\n| Android | 8+ | 真机测试（骁龙865及以上）' : '移动端H5 | iOS 15+ / Android 8+ | 真机+模拟器测试') + ' |\n';
+  acceptance += '\n## 安全验收（P0）\n| 验收项 | 验收标准 |\n|-------|---------|\n';
+  acceptance += '| 输入校验 | 所有用户输入前后端双重校验，SQL注入/XSS测试通过 |\n';
+  acceptance += '| ' + (matches('对战', '支付', '交易') ? '防作弊 | 关键逻辑服务端权威，客户端不可篡改' : '权限控制 | 越权操作返回403，RBAC权限测试通过') + ' |\n';
+  acceptance += '| 敏感数据 | 日志中无明文密码/手机号/身份证 |\n';
+
+  return { overview, disassembly, flow, ui, data, tech, acceptance };
+}
+
+
+function openDesignDoc(cardId, event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  const req = requirements.find(r => r.id === cardId);
+  if (!req) return;
+  currentDocCardId = cardId;
+  document.getElementById('docModalTitle').textContent = '📄 ' + req.title;
+  document.getElementById('docMeta').textContent =
+    (typeNames[req.type]||'') + ' · ' + (stageNames[req.currentStage]||req.currentStage);
+
+  const existingDoc = req.designDoc;
+  // Auto-generate if no doc exists
+  const fillDoc = existingDoc || autoGenDoc(req);
+  // If doc exists but missing disassembly, auto-fill it from template
+  if (existingDoc && !existingDoc.disassembly) {
+    fillDoc.disassembly = autoGenDoc(req).disassembly;
+  }
+
+  const sections = [
+    { key:'overview', label:'📋 功能概述', placeholder:'描述该功能的核心目标和用户价值...' },
+    { key:'disassembly', label:'🔧 功能拆卸', placeholder:'按模块拆解子功能，含依赖关系、工时预估、技术风险...' },
+    { key:'flow', label:'🔄 核心流程', placeholder:'描述用户操作流程，从入口到完成的完整路径...' },
+    { key:'ui', label:'🎨 交互与视觉要点', placeholder:'关键页面布局、交互行为、视觉风格参考...' },
+    { key:'data', label:'📊 数据与数值设计', placeholder:'涉及的数据模型、数值公式、配置参数...' },
+    { key:'tech', label:'⚙️ 技术实现要点', placeholder:'关键技术方案、接口依赖、性能指标...' },
+    { key:'acceptance', label:'✅ 验收标准', placeholder:'明确的验收条件，可测试、可度量...' },
+  ];
+
+  let html = '';
+  sections.forEach(s => {
+    html += '<div class="doc-section"><h3>'+s.label+'</h3><textarea id="doc-'+s.key+'" placeholder="'+s.placeholder+'">'+escapeHtml(fillDoc[s.key]||'')+'</textarea></div>';
+  });
+  document.getElementById('docSections').innerHTML = html;
+  document.getElementById('docModal').style.display = 'flex';
+}
+
+function saveDesignDoc() {
+  const req = requirements.find(r => r.id === currentDocCardId);
+  if (!req) return;
+  const doc = {};
+  ['overview','disassembly','flow','ui','data','tech','acceptance'].forEach(key => {
+    const val = document.getElementById('doc-'+key).value.trim();
+    if (val) doc[key] = val;
+  });
+  req.designDoc = Object.keys(doc).length > 0 ? doc : null;
+  saveAll();
+  renderAll();
+  closeDocModal();
+  showToast('策划文档已保存');
+}
+
+function closeDocModal() {
+  document.getElementById('docModal').style.display = 'none';
+  currentDocCardId = null;
+}
+
+function renderAll() { renderBoard(); updateFrameworkBtn(); }
+
+window.addEventListener('resize', () => requestAnimationFrame(()=>drawConnections()));
+
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') {
+    closeAddModal(); closeLinkModal(); closeLinkManager(); closeDocModal();
+    exitLinkMode();
+  }
+  if (e.key==='n'&&e.ctrlKey) { e.preventDefault(); openAddModal(); }
+});
+
+document.addEventListener('click', e => {
+  if (linkMode) return;
+  const card = e.target.closest('.card');
+  if (card&&!e.target.closest('.card-delete')&&!e.target.closest('.card-doc-btn')) {
+    openAddModal(card.dataset.id);
+  }
+});
+
+let draggedCard = null;
+loadData();
+renderAll();
+updateFrameworkBtn();
+
+// ============== 玩法框架 ==============
+
+const fwCategoryMap = [
+  { re: /对战|战斗|技能|回合|伤害|胜负/i, cat:'battle', ring:0 },
+  { re: /收集|养成|卡牌获取|升级|进化|稀有|图鉴/i, cat:'core', ring:1 },
+  { re: /卡组|构筑|编辑|构建|导入|导出/i, cat:'core', ring:1 },
+  { re: /匹配|排位|段位|MMR|排行榜/i, cat:'core', ring:1 },
+  { re: /商城|抽卡|卡包|购买|礼包|支付/i, cat:'economy', ring:1 },
+  { re: /货币|经济|金币|钻石|产出|消耗|通胀/i, cat:'economy', ring:1 },
+  { re: /任务|成就|日常|周常|赛季任务/i, cat:'system', ring:2 },
+  { re: /社交|好友|聊天|观战|赠礼/i, cat:'system', ring:2 },
+  { re: /引导|教程|新手|教学|首次/i, cat:'system', ring:2 },
+  { re: /回放|分享|录像|片段/i, cat:'system', ring:2 },
+  { re: /数值|平衡|参数|胜率|监控/i, cat:'infra', ring:3 },
+  { re: /UI|动效|特效|视觉|动画|适配/i, cat:'infra', ring:3 },
+  { re: /多语言|本地化|翻译/i, cat:'infra', ring:3 },
+];
+
+const fwCatLabels = { battle:'对战核心', core:'核心系统', economy:'经济系统', system:'功能系统', infra:'基础设施' };
+const fwRingLabels = ['对战引擎', '核心玩法', '周边系统', '支撑层'];
+const fwRingColors = ['rgba(200,70,50,0.15)', 'rgba(124,92,191,0.12)', 'rgba(74,144,217,0.10)', 'rgba(148,163,184,0.08)'];
+const fwLineColors = { battle:'#D85A30', core:'#7C5CBF', economy:'#1D9E75', system:'#4A90D9', infra:'#94a3b8' };
+
+function categorizeFrameworkCard(card) {
+  const t = (card.title + ' ' + (card.desc||'')).toLowerCase();
+  for (const m of fwCategoryMap) {
+    if (m.re.test(t)) return { cat: m.cat, ring: m.ring };
+  }
+  return { cat: 'system', ring: 2 };
+}
+
+function getFrameworkConnections(cards) {
+  const conns = [];
+  // Auto-derive connections from card relationships
+  const catOrder = ['battle', 'economy', 'core', 'system', 'infra'];
+  const battleCards = cards.filter(c => categorizeFrameworkCard(c).cat === 'battle');
+  const coreCards = cards.filter(c => categorizeFrameworkCard(c).cat === 'core');
+  const economyCards = cards.filter(c => categorizeFrameworkCard(c).cat === 'economy');
+  const systemCards = cards.filter(c => categorizeFrameworkCard(c).cat === 'system');
+  const infraCards = cards.filter(c => categorizeFrameworkCard(c).cat === 'infra');
+
+  // Battle core ← → all core systems
+  battleCards.forEach(b => coreCards.forEach(c => conns.push({ from: b.id, to: c.id, type: 'battle-core' })));
+
+  // Economy feeds into core (商城 → 收集, 货币 → 对战)
+  economyCards.forEach(e => {
+    coreCards.forEach(c => conns.push({ from: e.id, to: c.id, type: 'eco-core' }));
+    if (battleCards.length) conns.push({ from: e.id, to: battleCards[0].id, type: 'eco-battle' });
+  });
+
+  // System cards support core
+  systemCards.forEach(s => coreCards.slice(0, 2).forEach(c => conns.push({ from: s.id, to: c.id, type: 'sys-core' })));
+
+  // Core cards interconnect
+  for (let i = 0; i < coreCards.length; i++) {
+    for (let j = i + 1; j < coreCards.length; j++) {
+      conns.push({ from: coreCards[i].id, to: coreCards[j].id, type: 'core-core' });
+    }
+  }
+
+  // Add existing custom links
+  customLinks.forEach(l => {
+    const fromCard = cards.find(c => c.id === l.from);
+    const toCard = cards.find(c => c.id === l.to);
+    if (fromCard && toCard) conns.push({ from: l.from, to: l.to, type: 'custom' });
+  });
+
+  return conns;
+}
+
+function fwNodePositions(cards, bodyW, bodyH) {
+  const positions = {};
+  const cx = bodyW / 2, cy = bodyH / 2;
+  const rings = { battle:[], core:[], economy:[], system:[], infra:[] };
+
+  cards.forEach(c => {
+    const { cat } = categorizeFrameworkCard(c);
+    rings[cat].push(c);
+  });
+
+  // Ring radii
+  const radii = [0, Math.min(bodyW, bodyH) * 0.2, Math.min(bodyW, bodyH) * 0.35, Math.min(bodyW, bodyH) * 0.5];
+
+  // Battle: single center node
+  if (rings.battle.length) {
+    positions[rings.battle[0].id] = { x: cx, y: cy };
+  }
+
+  // Core (ring 1): 4 nodes max in circle
+  const r1 = radii[1];
+  rings.core.slice(0, 4).forEach((c, i) => {
+    const angle = (i / Math.max(rings.core.length, 4)) * Math.PI * 2 - Math.PI / 2;
+    positions[c.id] = { x: cx + r1 * Math.cos(angle), y: cy + r1 * Math.sin(angle) };
+  });
+
+  // Economy (ring 1 but offset): 2 nodes
+  rings.economy.slice(0, 2).forEach((c, i) => {
+    const angle = Math.PI * 0.25 + i * Math.PI;
+    positions[c.id] = { x: cx + r1 * 0.85 * Math.cos(angle), y: cy + r1 * 0.85 * Math.sin(angle) };
+  });
+
+  // System (ring 2): up to 6 nodes
+  const r2 = radii[2];
+  rings.system.slice(0, 6).forEach((c, i) => {
+    const angle = (i / Math.max(rings.system.length, 6)) * Math.PI * 2 - Math.PI / 2;
+    positions[c.id] = { x: cx + r2 * Math.cos(angle), y: cy + r2 * Math.sin(angle) };
+  });
+
+  // Infra (ring 3): bottom row
+  const r3 = radii[3];
+  rings.infra.slice(0, 3).forEach((c, i) => {
+    const angle = (i / Math.max(rings.infra.length, 3)) * Math.PI + Math.PI * 0.1;
+    positions[c.id] = { x: cx + r3 * Math.cos(angle + Math.PI * 0.3), y: cy + r3 * Math.sin(angle + Math.PI * 0.3) };
+  });
+
+  return positions;
+}
+
+function drawFrameworkLines(cards, positions) {
+  const svg = document.getElementById('frameworkSvg');
+  const body = document.getElementById('frameworkBody');
+  const bw = body.offsetWidth, bh = body.offsetHeight;
+  svg.setAttribute('viewBox', `0 0 ${bw} ${bh}`);
+  svg.style.width = bw + 'px'; svg.style.height = bh + 'px';
+
+  const conns = getFrameworkConnections(cards);
+  let html = '';
+
+  conns.forEach(conn => {
+    const fp = positions[conn.from], tp = positions[conn.to];
+    if (!fp || !tp) return;
+
+    const color = conn.type === 'custom' ? '#f0c060' :
+      conn.type === 'battle-core' ? '#D85A30' :
+      conn.type === 'eco-core' ? '#1D9E75' :
+      conn.type === 'core-core' ? '#7C5CBF' : '#4A90D9';
+
+    const opacity = conn.type === 'custom' ? 0.8 : 0.35;
+    const dx = tp.x - fp.x, dy = tp.y - fp.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const midX = (fp.x + tp.x) / 2, midY = (fp.y + tp.y) / 2;
+    const cpx = midX, cpy = midY - dist * 0.08;
+
+    html += `<path d="M${fp.x},${fp.y} Q${cpx},${cpy} ${tp.x},${tp.y}" class="fw-flow-line"
+      style="stroke:${color};opacity:${opacity};animation:fwFlow 3s linear infinite;animation-delay:${Math.random()*2}s"/>`;
+  });
+
+  svg.innerHTML = html;
+  document.getElementById('fwStatLinks').textContent = '连线 ' + conns.length;
+}
+
+function renderFrameworkNodes(cards) {
+  const container = document.getElementById('fwNodesContainer');
+  const body = document.getElementById('frameworkBody');
+  const bw = body.offsetWidth, bh = body.offsetHeight;
+  const positions = fwNodePositions(cards, bw, bh);
+
+  container.innerHTML = '';
+  cards.forEach(card => {
+    const pos = positions[card.id];
+    if (!pos) return;
+    const { cat } = categorizeFrameworkCard(card);
+    const cls = 'fw-node fw-' + (cat === 'battle' ? 'battle' : cat === 'core' ? 'core' : cat === 'economy' ? 'economy' : cat === 'infra' ? 'infra' : 'system');
+    const shortTitle = card.title.length > 10 ? card.title.slice(0, 8) + '…' : card.title;
+    const hasDoc = !!card.designDoc;
+
+    const el = document.createElement('div');
+    el.className = cls;
+    el.style.left = pos.x + 'px';
+    el.style.top = pos.y + 'px';
+    el.innerHTML = `${shortTitle}${hasDoc ? '<span class="fw-doc-dot" title="已写文档"></span>' : ''}<div class="fw-subtitle">${fwCatLabels[cat]||''}</div>`;
+    el.addEventListener('mouseenter', e => showFwTooltip(e, card, cat));
+    el.addEventListener('mouseleave', hideFwTooltip);
+    el.addEventListener('click', () => openDesignDoc(card.id));
+    container.appendChild(el);
+  });
+
+  requestAnimationFrame(() => drawFrameworkLines(cards, positions));
+}
+
+function showFwTooltip(e, card, cat) {
+  const tip = document.getElementById('fwTooltip');
+  const hasDoc = !!card.designDoc;
+  let docPreview = '';
+  if (hasDoc && card.designDoc.overview) {
+    docPreview = '<br><br><strong>📄 策划摘要：</strong>' + card.designDoc.overview.replace(/##.*?\n/g, '').replace(/\n+/g,' ').slice(0, 100) + '…';
+  }
+  let disPreview = '';
+  if (hasDoc && card.designDoc.disassembly) {
+    const m = card.designDoc.disassembly.match(/预估工时\(人日\)[^]*?总计\|[^|]*\|([^|]*)\|/);
+    const totalHrs = m ? m[1].trim() : '';
+    disPreview = totalHrs ? '<br><strong>🔧 预估总工时：</strong>' + totalHrs : '';
+  }
+  tip.innerHTML = `<strong>${card.title}</strong><br>类型：${typeNames[card.type]||''} · 阶段：${stageNames[card.currentStage]||''}<br>${card.desc||''}${docPreview}${disPreview}${!hasDoc ? '<br><br><em style="color:#888">点击打开策划文档编辑</em>' : ''}`;
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX + 18) + 'px';
+  tip.style.top = (e.clientY - 10) + 'px';
+}
+
+function hideFwTooltip() {
+  document.getElementById('fwTooltip').style.display = 'none';
+}
+
+function updateFrameworkBtn() {
+  const btn = document.getElementById('fwBtn');
+  if (!btn) return;
+  const totalCards = requirements.filter(r => r.type === 'feature' || r.type === 'optimize').length;
+  const docCards = requirements.filter(r => r.designDoc).length;
+  const ratio = totalCards > 0 ? docCards / totalCards : 0;
+
+  if (ratio >= 0.5 || docCards >= 3) {
+    btn.className = 'fw-generate-btn ready';
+    btn.textContent = '🎮 玩法框架 ✓';
+    btn.title = `${docCards}/${totalCards} 张卡片已有策划文档，点击查看交互玩法框架`;
+  } else {
+    btn.className = 'fw-generate-btn';
+    btn.textContent = '🎮 玩法框架';
+    btn.title = `需至少3张卡片完成策划文档（当前 ${docCards}）`;
+  }
+}
+
+function openFramework() {
+  const totalCards = requirements.filter(r => r.type === 'feature' || r.type === 'optimize').length;
+  const docCards = requirements.filter(r => r.designDoc).length;
+
+  if (docCards < 3 && totalCards > 0) {
+    if (!confirm(`当前仅 ${docCards} 张卡片有策划文档，生成的框架可能不完整。是否继续？`)) return;
+  }
+
+  document.getElementById('frameworkOverlay').style.display = 'flex';
+  document.getElementById('fwStatNodes').textContent = '节点 ' + requirements.length;
+  document.getElementById('fwStatDocs').textContent = '📄 文档覆盖率 ' + (totalCards > 0 ? Math.round(docCards/totalCards*100) : 0) + '%';
+
+  // Render legend
+  const legend = document.getElementById('fwLegend');
+  legend.innerHTML = Object.entries(fwCatLabels).map(([k, v]) =>
+    `<div class="fw-legend-item"><span class="fw-legend-dot" style="background:${fwLineColors[k]}"></span>${v}</div>`
+  ).join('') + '<div class="fw-legend-item"><span class="fw-legend-dot" style="background:#f0c060"></span>自定义关联</div>';
+
+  setTimeout(() => renderFrameworkNodes(requirements), 100);
+  document.addEventListener('keydown', fwEscHandler);
+}
+
+function closeFramework() {
+  document.getElementById('frameworkOverlay').style.display = 'none';
+  document.getElementById('frameworkSvg').innerHTML = '';
+  document.getElementById('fwNodesContainer').innerHTML = '';
+  document.removeEventListener('keydown', fwEscHandler);
+}
+
+function fwEscHandler(e) {
+  if (e.key === 'Escape') { closeFramework(); }
+}
+
+window.addEventListener('resize', () => {
+  const overlay = document.getElementById('frameworkOverlay');
+  if (overlay.style.display === 'flex') {
+    renderFrameworkNodes(requirements);
+  }
+});
+</script>
+</body>
+</html>
